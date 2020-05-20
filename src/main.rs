@@ -1,6 +1,6 @@
 use crossbeam_channel::{bounded, select};
 use failure::Error;
-use log::{debug, info};
+use log::info;
 use rumqtt::{MqttClient, MqttOptions, Notification, Publish, QoS, SecurityOptions};
 use serde::Deserialize;
 use std::fs::File;
@@ -33,11 +33,12 @@ impl FromStr for Topic {
 
     fn from_str(s: &str) -> Result<Self> {
         let content: Vec<&str> = s.split("/").collect();
-        if
+        if content.len() < 5 {
+            return Err(failure::format_err!("Topic too short"));
+        };
         if content[0] != "tuya" {
             return Err(failure::format_err!("Not a tuya topic"));
         };
-        
 
         Ok(Topic {
             tuya_ver: content[1].to_string(),
@@ -112,16 +113,12 @@ mod tests {
     use super::*;
     #[test]
     fn topic_from_string() {
-
-        let topic = Topic::from_str(
-            "tuya/ver3.3/545c7250ecf8bc58a8fd/6597042c66252228/192.168.170.7/command",
-        )
-        .unwrap();
         assert!(Topic::from_str("ayut/ver3.3/adf").is_err());
         assert!(Topic::from_str("tuya/ver3.3/adf/18356").is_err());
         let topic = Topic::from_str(
             "tuya/ver3.3/545c7250ecf8bc58a8fd/6597042c66252228/192.168.170.7/command",
         )
+        .unwrap();
         assert_eq!(
             topic,
             Topic {
@@ -130,6 +127,6 @@ mod tests {
                 tuya_key: "6597042c66252228".to_string(),
                 ip: Ipv4Addr::new(192, 168, 170, 7),
             },
-        )
+        );
     }
 }

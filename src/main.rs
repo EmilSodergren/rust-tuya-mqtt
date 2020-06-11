@@ -1,12 +1,14 @@
 use crossbeam_channel::{bounded, select};
 use failure::Error;
-use log::info;
+use log::{debug, error, info};
 use rumqtt::{MqttClient, MqttOptions, Notification, Publish, QoS, SecurityOptions};
+use rust_tuyapi::mesparse::{Message, MessageParser};
 use serde::Deserialize;
 use std::fs::File;
-use std::io::BufReader;
-use std::net::Ipv4Addr;
+use std::io::{prelude::*, BufReader};
+use std::net::{Ipv4Addr, Shutdown, SocketAddrV4, TcpStream};
 use std::str::FromStr;
+use std::thread;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -49,18 +51,35 @@ impl FromStr for Topic {
     }
 }
 
-fn handle_publish(publish: Publish) -> Result<()> {
+fn handle_publish(publish: Publish) {
     info!("Received packet {:?}", &publish);
-    let topic: Topic = publish.topic_name.parse()?;
-    Ok(())
+    let topic: Topic = publish
+        .topic_name
+        .parse()
+        .expect("Could not parse the package");
+
+    // For now choose one of the things
+    if topic.tuya_id.chars().last().unwrap() == 'b' {
+        let tcpstream = TcpStream::connect(SocketAddrV4::new(topic.ip, 6668))
+            .expect("Could not create TcpStream");
+        debug!("Connected to the server");
+        println!("{:?}", topic);
+        println!(
+            "{:?}",
+            std::str::from_utf8(&publish.payload).expect("Payload is not valid utf8")
+        );
+        debug!("shutting down connection");
+        tcpstream
+            .shutdown(Shutdown::Both)
+            .expect("Could not shut down stream");
+    }
 }
 
-fn handle_notification(notification: Notification) -> Result<()> {
+fn handle_notification(notification: Notification) {
     match notification {
-        Notification::Publish(publish) => handle_publish(publish)?,
-        _ => info!("{:?}", notification),
+        Notification::Publish(publish) => handle_publish(publish),
+        _ => debug!("{:?}", notification),
     };
-    Ok(())
 }
 
 fn main() -> Result<()> {
@@ -68,6 +87,7 @@ fn main() -> Result<()> {
     info!("Reading config file");
     let file_reader = BufReader::new(File::open("config.json")?);
     let config: Config = serde_json::from_reader(file_reader)?;
+    debug!("Read {:#?}", config);
 
     let mut options =
         MqttOptions::new("rust-tuya-mqtt", config.host, config.port).set_keep_alive(10);
@@ -95,7 +115,8 @@ fn main() -> Result<()> {
     loop {
         select! {
             recv(notifications) -> n => {
-                handle_notification(n?)?;
+                let n = n?;
+                thread::spawn(|| handle_notification(n));
             },
             recv(done_rx) -> _ => {
                 info!("Received termination, shutting down the mqtt connection");

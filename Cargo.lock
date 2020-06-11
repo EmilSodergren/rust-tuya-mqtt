@@ -956,6 +956,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "openssl",
+ "serde",
  "serde_json",
 ]
 

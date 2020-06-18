@@ -2,7 +2,8 @@ use crossbeam_channel::{bounded, select};
 use failure::Error;
 use log::{debug, error, info};
 use rumqtt::{MqttClient, MqttOptions, Notification, Publish, QoS, SecurityOptions};
-use rust_tuyapi::mesparse::{Message, MessageParser};
+use rust_tuyapi::mesparse::{CommandType, Message, MessageParser};
+use rust_tuyapi::{get_payload, TuyaType};
 use serde::Deserialize;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
@@ -60,14 +61,30 @@ fn handle_publish(publish: Publish) {
 
     // For now choose one of the things
     if topic.tuya_id.chars().last().unwrap() == 'b' {
-        let tcpstream = TcpStream::connect(SocketAddrV4::new(topic.ip, 6668))
+        let mut tcpstream = TcpStream::connect(SocketAddrV4::new(topic.ip, 6668))
             .expect("Could not create TcpStream");
         debug!("Connected to the server");
-        println!("{:?}", topic);
-        println!(
-            "{:?}",
-            std::str::from_utf8(&publish.payload).expect("Payload is not valid utf8")
-        );
+        debug!("{:?}", topic);
+        let mqtt_state = std::str::from_utf8(&publish.payload).expect("Payload is not valid utf8");
+        let tuya_payload = get_payload(&topic.tuya_id, TuyaType::Socket, &mqtt_state)
+            .expect("Could not get Payload from MQTT message");
+        info!("Writing message {}", &tuya_payload);
+        let mp = MessageParser::create(&topic.tuya_ver, Some(&topic.tuya_key))
+            .expect("Could not create Tuya Message Parser");
+        let mes = Message::new(tuya_payload.as_bytes(), CommandType::Control, None);
+        let bts = tcpstream
+            .write(
+                &mp.encode(&mes, true)
+                    .expect(&format!("could not encode message {:?}", mes)),
+            )
+            .expect("Write to socket failed");
+        info!("Wrote {} bytes.", bts);
+        let mut buf = [0; 256];
+        tcpstream.read(&mut buf).expect("Read failed");
+        info!("{:?}", &buf.to_vec());
+        let message = mp.parse(&buf).expect("Parse of reply failed");
+        info!("Tuya device replied {:?}", message[0]);
+
         debug!("shutting down connection");
         tcpstream
             .shutdown(Shutdown::Both)

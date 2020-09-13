@@ -1,6 +1,7 @@
+use atomic_counter::{AtomicCounter, RelaxedCounter};
 use crossbeam_channel::{bounded, select};
 use failure::Error;
-use log::{debug, error, info};
+use log::{debug, info, warn};
 use rumqtt::{MqttClient, MqttOptions, Notification, Publish, QoS, SecurityOptions};
 use rust_tuyapi::mesparse::{CommandType, Message, MessageParser};
 use rust_tuyapi::{get_payload, TuyaType};
@@ -9,6 +10,7 @@ use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::net::{Ipv4Addr, Shutdown, SocketAddrV4, TcpStream};
 use std::str::FromStr;
+use std::sync::Arc;
 use std::thread;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -52,50 +54,55 @@ impl FromStr for Topic {
     }
 }
 
-fn handle_publish(publish: Publish) {
+fn handle_publish(publish: Publish, counter: Arc<RelaxedCounter>) {
     info!("Received packet {:?}", &publish);
     let topic: Topic = publish
         .topic_name
         .parse()
         .expect("Could not parse the package");
 
-    // For now choose one of the things
-    if topic.tuya_id.chars().last().unwrap() == 'b' {
-        let mut tcpstream = TcpStream::connect(SocketAddrV4::new(topic.ip, 6668))
-            .expect("Could not create TcpStream");
-        debug!("Connected to the server");
-        debug!("{:?}", topic);
-        let mqtt_state = std::str::from_utf8(&publish.payload).expect("Payload is not valid utf8");
-        let tuya_payload = get_payload(&topic.tuya_id, TuyaType::Socket, &mqtt_state)
-            .expect("Could not get Payload from MQTT message");
-        info!("Writing message {}", &tuya_payload);
-        let mp = MessageParser::create(&topic.tuya_ver, Some(&topic.tuya_key))
-            .expect("Could not create Tuya Message Parser");
-        let mes = Message::new(tuya_payload.as_bytes(), CommandType::Control, None);
-        let bts = tcpstream
-            .write(
-                &mp.encode(&mes, true)
-                    .expect(&format!("could not encode message {:?}", mes)),
-            )
-            .expect("Write to socket failed");
-        info!("Wrote {} bytes.", bts);
-        let mut buf = [0; 256];
-        tcpstream.read(&mut buf).expect("Read failed");
-        info!("{:?}", &buf.to_vec());
-        let message = mp.parse(&buf).expect("Parse of reply failed");
-        info!("Tuya device replied {:?}", message[0]);
-
-        debug!("shutting down connection");
-        tcpstream
-            .shutdown(Shutdown::Both)
-            .expect("Could not shut down stream");
+    let mut tcpstream = TcpStream::connect(SocketAddrV4::new(topic.ip, 6668))
+        .expect(&format!("Could not create TcpStream to {}", topic.ip));
+    info!("Connected to the device on ip {}", topic.ip);
+    debug!("{:?}", topic);
+    let mqtt_state = std::str::from_utf8(&publish.payload).expect("Payload is not valid utf8");
+    let tuya_payload = get_payload(&topic.tuya_id, TuyaType::Socket, &mqtt_state)
+        .expect("Could not get Payload from MQTT message");
+    info!("Writing message {} to {}", &tuya_payload, topic.ip);
+    let mp = MessageParser::create(&topic.tuya_ver, Some(&topic.tuya_key))
+        .expect("Could not create Tuya Message Parser");
+    let mes = Message::new(
+        tuya_payload.as_bytes(),
+        CommandType::Control,
+        Some(counter.inc() as u32),
+    );
+    let bts = tcpstream
+        .write(
+            &mp.encode(&mes, true)
+                .expect(&format!("could not encode message {:?}", mes)),
+        )
+        .expect("Write to socket failed");
+    info!("Wrote {} bytes.", bts);
+    let mut buf = [0; 256];
+    let bts = tcpstream.read(&mut buf).expect("Read failed");
+    info!("Received {} bytes", bts);
+    if bts > 0 {
+        debug!("{:?}", &buf[..bts]);
+        // TODO: Can receive more than one message
+        let message = mp.parse(&buf[..bts]).expect("Parse of reply failed");
+        info!("Tuya device replied {}", &message[0]);
     }
+
+    debug!("shutting down connection");
+    tcpstream
+        .shutdown(Shutdown::Both)
+        .expect("Could not shut down stream");
 }
 
-fn handle_notification(notification: Notification) {
+fn handle_notification(notification: Notification, counter: Arc<RelaxedCounter>) {
     match notification {
-        Notification::Publish(publish) => handle_publish(publish),
-        _ => debug!("{:?}", notification),
+        Notification::Publish(publish) => handle_publish(publish, counter),
+        _ => warn!("Received unhandled notification {:?}", notification),
     };
 }
 
@@ -128,12 +135,13 @@ fn main() -> Result<()> {
         format!("{}{}", config.topic, "#"),
         QoS::from_u8(config.qos)?,
     )?;
-
+    let counter = Arc::new(RelaxedCounter::new(0));
     loop {
         select! {
             recv(notifications) -> n => {
                 let n = n?;
-                thread::spawn(|| handle_notification(n));
+                let a_counter = Arc::clone(&counter);
+                thread::spawn(|| handle_notification(n, a_counter));
             },
             recv(done_rx) -> _ => {
                 info!("Received termination, shutting down the mqtt connection");

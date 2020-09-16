@@ -4,7 +4,7 @@ use failure::Error;
 use log::{debug, info, warn};
 use rumqtt::{MqttClient, MqttOptions, Notification, Publish, QoS, SecurityOptions};
 use rust_tuyapi::mesparse::{CommandType, Message, MessageParser};
-use rust_tuyapi::{get_payload, TuyaType};
+use rust_tuyapi::{payload, TuyaType};
 use serde::Deserialize;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
@@ -66,7 +66,7 @@ fn handle_publish(publish: Publish, counter: Arc<RelaxedCounter>) {
     info!("Connected to the device on ip {}", topic.ip);
     debug!("{:?}", topic);
     let mqtt_state = std::str::from_utf8(&publish.payload).expect("Payload is not valid utf8");
-    let tuya_payload = get_payload(&topic.tuya_id, TuyaType::Socket, &mqtt_state)
+    let tuya_payload = payload(&topic.tuya_id, TuyaType::Socket, &mqtt_state)
         .expect("Could not get Payload from MQTT message");
     info!("Writing message {} to {}", &tuya_payload, topic.ip);
     let mp = MessageParser::create(&topic.tuya_ver, Some(&topic.tuya_key))

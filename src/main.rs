@@ -1,3 +1,4 @@
+use crate::error::ErrorKind;
 use atomic_counter::{AtomicCounter, RelaxedCounter};
 use crossbeam_channel::{bounded, select};
 use failure::Error;
@@ -12,6 +13,8 @@ use std::net::{Ipv4Addr, Shutdown, SocketAddrV4, TcpStream};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
+
+mod error;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -39,10 +42,10 @@ impl FromStr for Topic {
     fn from_str(s: &str) -> Result<Self> {
         let content: Vec<&str> = s.split("/").collect();
         if content.len() < 5 {
-            return Err(failure::format_err!("Topic too short"));
+            return Err(ErrorKind::TopicTooShort.into());
         };
         if content[0] != "tuya" {
-            return Err(failure::format_err!("Not a tuya topic"));
+            return Err(ErrorKind::NotATuyaTopic.into());
         };
 
         Ok(Topic {

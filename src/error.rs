@@ -6,12 +6,6 @@ pub struct Error {
     inner: Context<ErrorKind>,
 }
 
-impl Error {
-    pub fn kind(&self) -> &ErrorKind {
-        self.inner.get_context()
-    }
-}
-
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Display::fmt(&self.inner, f)

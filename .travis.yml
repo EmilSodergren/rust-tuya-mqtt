@@ -20,20 +20,23 @@ jobs:
 
     # Linux
     - env: TARGET=armv7-unknown-linux-gnueabihf
-      rust:
-        - stable
-        - beta
-        - nightly
+      rust: stable
+    - env: TARGET=armv7-unknown-linux-gnueabihf
+      rust: beta
+    - env: TARGET=armv7-unknown-linux-gnueabihf
+      rust: nightly
     - env: TARGET=x86_64-unknown-linux-gnu
-      rust:
-        - stable
-        - beta
-        - nightly
+      rust: stable
+    - env: TARGET=x86_64-unknown-linux-gnu
+      rust: beta
+    - env: TARGET=x86_64-unknown-linux-gnu
+      rust: nightly
     - env: TARGET=x86_64-unknown-linux-musl
-      rust:
-        - stable
-        - beta
-        - nightly
+      rust: stable
+    - env: TARGET=x86_64-unknown-linux-musl
+      rust: beta
+    - env: TARGET=x86_64-unknown-linux-musl
+      rust: nightly
 
 before_install:
   - set -e

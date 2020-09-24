@@ -3,6 +3,11 @@ name = "rust-tuya-mqtt"
 version = "0.1.0"
 authors = ["Emil Sodergren <EmilSodergren@users.noreply.github.com>"]
 edition = "2018"
+description = "This crate is a rust port of TheAgentK's implementation of tuya-mqtt in NodeJS"
+homepage = "https://github.com/EmilSodergren/rust-tuya-mqtt"
+repository = "https://github.com/EmilSodergren/rust-tuya-mqtt"
+license-file = "LICENSE"
+keywords = ["tuya", "smarthome", "smartlife", "mqtt", "openhab"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

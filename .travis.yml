@@ -1,10 +1,9 @@
 # Based on the "trust" template v0.1.2
 # https://github.com/japaric/trust/tree/v0.1.2
 
-dist: rust-tuya-mqtt
+dist: trusty
 language: rust
 services: docker
-sudo: required
 
 # TODO Rust builds on stable by default, this can be
 # overridden on a case by case basis down below.
@@ -14,7 +13,7 @@ env:
     # TODO Update this to match the name of your project.
     - CRATE_NAME=rust-tuya-mqtt
 
-matrix:
+jobs:
   # TODO These are all the build jobs. Adjust as necessary. Comment out what you
   # don't need
   include:
@@ -45,7 +44,7 @@ before_deploy:
   - sh ci/before_deploy.sh
 
 deploy:
-  api_key:
+  token:
     secure: "BBOTXGRUdiF71veCll7D/D7g2YO6vQzwYnFpkj3KBIxH8OCOmssaKhyuVxHVxsnTxsjrox0WLEtkMHPvuDjZqzbOh8IhO9gNYsnEy3aIevZ8xwt308n5ONm23J21OtmR5YCqJ9gyjyVzL7MkDwvmpVbxSGx6xSlNxjdiZSjJo8mf+97fI1PkYwgQyGJUJh0zaI6hEoU2F60OeghuLsZjXq977a2CbA4VOgoPiH1OMm9NEZ75XGt0zM2PJ1JbQZLPmfiVFP76bBm2bi3FtxKKWOOA3o+aCNdoWnrT83XpdQKwI0Y1/MddFWlhP88mxni4hVCLz+0dt/wJEvtE7vDdko9SWQwTcdvfHqnbElV/bZqUuRau0Co2QW0EKZ7pTbntP92tRxX/4MPRZUoraxLf0BJBcizosSoRgc3q2K7fGb5xn/yjRvqCBs24p6BeknKrrSvT61e1K5XsBNfiG3AQW48zyT1iqmVWhj/NX7mFlJpzufbLdn3fh+EFeuM2wGuAUtKFrBTenK8m1QqRrT97sZnmYLf3pRy12I3kEeLh0DAtoFjPjCZsBOyb3bmx6RpjOYD57sYlqwOyhFNUjr1NejRZH0ETrM30i5Li8j4WfxKUEyBHyqsUlTKihLGVrCrEx0E/OuRXaXQQ3tGq74HMbssGtDJ/XWSWE+EazOgzsTo="
   file_glob: true
   file: $CRATE_NAME-$TRAVIS_TAG-$TARGET.*
@@ -57,7 +56,7 @@ deploy:
     condition: $TRAVIS_RUST_VERSION = stable
     tags: true
   provider: releases
-  skip_cleanup: true
+  cleanup: false
 
 cache: cargo
 before_cache:

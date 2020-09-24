@@ -19,12 +19,6 @@ jobs:
   include:
 
     # Linux
-    - env: TARGET=armv7-unknown-linux-gnueabihf
-      rust: stable
-    - env: TARGET=armv7-unknown-linux-gnueabihf
-      rust: beta
-    - env: TARGET=armv7-unknown-linux-gnueabihf
-      rust: nightly
     - env: TARGET=x86_64-unknown-linux-gnu
       rust: stable
     - env: TARGET=x86_64-unknown-linux-gnu
@@ -33,10 +27,8 @@ jobs:
       rust: nightly
     - env: TARGET=x86_64-unknown-linux-musl
       rust: stable
-    - env: TARGET=x86_64-unknown-linux-musl
-      rust: beta
-    - env: TARGET=x86_64-unknown-linux-musl
-      rust: nightly
+    - env: TARGET=armv7-unknown-linux-gnueabihf
+      rust: stable
 
 before_install:
   - set -e
@@ -58,7 +50,7 @@ deploy:
   token:
     secure: "BBOTXGRUdiF71veCll7D/D7g2YO6vQzwYnFpkj3KBIxH8OCOmssaKhyuVxHVxsnTxsjrox0WLEtkMHPvuDjZqzbOh8IhO9gNYsnEy3aIevZ8xwt308n5ONm23J21OtmR5YCqJ9gyjyVzL7MkDwvmpVbxSGx6xSlNxjdiZSjJo8mf+97fI1PkYwgQyGJUJh0zaI6hEoU2F60OeghuLsZjXq977a2CbA4VOgoPiH1OMm9NEZ75XGt0zM2PJ1JbQZLPmfiVFP76bBm2bi3FtxKKWOOA3o+aCNdoWnrT83XpdQKwI0Y1/MddFWlhP88mxni4hVCLz+0dt/wJEvtE7vDdko9SWQwTcdvfHqnbElV/bZqUuRau0Co2QW0EKZ7pTbntP92tRxX/4MPRZUoraxLf0BJBcizosSoRgc3q2K7fGb5xn/yjRvqCBs24p6BeknKrrSvT61e1K5XsBNfiG3AQW48zyT1iqmVWhj/NX7mFlJpzufbLdn3fh+EFeuM2wGuAUtKFrBTenK8m1QqRrT97sZnmYLf3pRy12I3kEeLh0DAtoFjPjCZsBOyb3bmx6RpjOYD57sYlqwOyhFNUjr1NejRZH0ETrM30i5Li8j4WfxKUEyBHyqsUlTKihLGVrCrEx0E/OuRXaXQQ3tGq74HMbssGtDJ/XWSWE+EazOgzsTo="
   file_glob: true
-  file: $CRATE_NAME-$TRAVIS_TAG-$TARGET.*
+  file: $CRATE_NAME
   on:
     # TODO Here you can pick which targets will generate binary releases
     # In this example, there are some targets that are tested using the stable

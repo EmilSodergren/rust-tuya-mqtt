@@ -4,12 +4,12 @@ use crossbeam_channel::{bounded, select};
 use failure::Error;
 use log::{debug, info, warn};
 use rumqtt::{MqttClient, MqttOptions, Notification, Publish, QoS, SecurityOptions};
-use rust_tuyapi::mesparse::{CommandType, Message, MessageParser};
+use rust_tuyapi::mesparse::TuyaDevice;
 use rust_tuyapi::{payload, TuyaType};
 use serde::Deserialize;
 use std::fs::File;
-use std::io::{prelude::*, BufReader};
-use std::net::{Ipv4Addr, Shutdown, SocketAddrV4, TcpStream};
+use std::io::BufReader;
+use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
@@ -33,7 +33,7 @@ struct Topic {
     tuya_ver: String,
     tuya_id: String,
     tuya_key: String,
-    ip: Ipv4Addr,
+    ip: IpAddr,
 }
 
 impl FromStr for Topic {
@@ -63,43 +63,19 @@ fn handle_publish(publish: Publish, counter: Arc<RelaxedCounter>) {
         .topic_name
         .parse()
         .expect("Could not parse the package");
-
-    let mut tcpstream = TcpStream::connect(SocketAddrV4::new(topic.ip, 6668))
-        .expect(&format!("Could not create TcpStream to {}", topic.ip));
-    info!("Connected to the device on ip {}", topic.ip);
     debug!("{:?}", topic);
     let mqtt_state = std::str::from_utf8(&publish.payload).expect("Payload is not valid utf8");
     let tuya_payload = payload(&topic.tuya_id, TuyaType::Socket, &mqtt_state)
         .expect("Could not get Payload from MQTT message");
-    info!("Writing message {} to {}", &tuya_payload, topic.ip);
-    let mp = MessageParser::create(&topic.tuya_ver, Some(&topic.tuya_key))
-        .expect("Could not create Tuya Message Parser");
-    let mes = Message::new(
-        tuya_payload.as_bytes(),
-        CommandType::Control,
-        Some(counter.inc() as u32),
-    );
-    let bts = tcpstream
-        .write(
-            &mp.encode(&mes, true)
-                .expect(&format!("could not encode message {:?}", mes)),
-        )
-        .expect("Write to socket failed");
-    info!("Wrote {} bytes.", bts);
-    let mut buf = [0; 256];
-    let bts = tcpstream.read(&mut buf).expect("Read failed");
-    info!("Received {} bytes", bts);
-    if bts > 0 {
-        debug!("{:?}", &buf[..bts]);
-        // TODO: Can receive more than one message
-        let message = mp.parse(&buf[..bts]).expect("Parse of reply failed");
-        info!("Tuya device replied {}", &message[0]);
-    }
-
-    debug!("shutting down connection");
-    tcpstream
-        .shutdown(Shutdown::Both)
-        .expect("Could not shut down stream");
+    let tuya_device = TuyaDevice::create(
+        &topic.tuya_ver,
+        Some(&topic.tuya_key),
+        Some(SocketAddr::new(topic.ip, 6668)),
+    )
+    .expect("Could not create TuyaDevice");
+    tuya_device
+        .set(&tuya_payload, counter.inc() as u32)
+        .expect("Could not set value to TuyaDevice");
 }
 
 fn handle_notification(notification: Notification, counter: Arc<RelaxedCounter>) {
@@ -174,7 +150,7 @@ mod tests {
                 tuya_ver: "ver3.3".to_string(),
                 tuya_id: "545c7250ecf8bc58a8fd".to_string(),
                 tuya_key: "6597042c66252228".to_string(),
-                ip: Ipv4Addr::new(192, 168, 170, 7),
+                ip: "192.168.170.7".parse().unwrap(),
             },
         );
     }

@@ -44,8 +44,9 @@ before_deploy:
   - sh ci/before_deploy.sh
 
 deploy:
+  provider: releases
   api-key:
-    secure: H4Bh8t1eAAnPMY2p85CYzdoWJUjs7jf4bv510YKnkXCKAFkmJY2kgsm92PNbYiZyK1wyvQWxIY6GycYauTMc37IDgC58oSy+2ZTh2XMzY72MQKF6nR1YiWkQ+5ZCVN5rDNUe9HMTwtkK6UjLhsX+o1mJ+U8WDX01FILE3wbNWHDc1ks2jctLnR2VzCe6BbhPVekmRjBYJ7AAuQU8aBiYwBIaGQE7wpeWIHG6vxHn11Bdo08bhMdfMni+adTdnS321mk1FFhhWD9ui+3NaARNGXNI2KCCRruhPt4KTKYOcYKjqZViz9TWGfHrwvkij10CBUPUH4t2raFNHwLhh7j2bwdnAgGkdY1MuOkhkfugcc41JQrAjb3Upsg8hQTHztnsd1DIY6YRGUYnGAUNJvMEwecSadxXlHKKXfIq05DmBFsRrtc92Snv0DDLIokHzJ8VlmAsEXBmaOQ35Pj29jLFi2CtZlQHL21K0PRYq4S58AgJ9mjBYxyixFPRgbBjsgXVipNsD6kOyOsXvwHpQi5WZ1IJLry27QKOd/Ymb2HL/jFyjHcW5PPooxW8TeLzx5fC9LRBzbH2+1X7x2LRxKxbKC1W7EAIteXF0Q73VSpOJHVfdOlUGh9Ik0Fklynei34CRiw/V2211+MWbfKWJUcDc52IusYITUoXCMRNcAf4mbU=
+    secure: JD/Djv3MW/y1gW7zKBysGJKZEGmPkMr6X+y8A6yVDEFAf/IjEpBF8XCi7tXtTfPLTEysmBNhvwzes37T+c+RctffS7UTas9kAXDbFTe9EYvOy41zZ1BmhWVG6VXNigf/EyIsz+mTtr82YNenQS3Gio9N8Q53KIL/lKDg3dnhLxnyhsBHkQ8p/9LyDIQ0INH76w6O7imMMYynvaAYe9TPOQVXciv9tMVpTWPMZxl+SvamUIoDu8QxV0ZMPJjVqCfLkG9K7DNsh/BCNi69Pr2nq6z3F3JLjB3yfPoh/jZYEk+Ye7FJtpMgRVFnLBEEZbms0wvtFh/TSN/Hf6++7MllhiOJYODwAyWHQgQqRcZ8wHL77DPqPdl22j/f/tdYjtljjQZaLPcc/TB2GH0nFSIjCw1DcqHoHhWsQcaD9A3e439q2zyZ1sepw2s/9+ZHKI8IAIGgTtgIfQOGHkZFzeo1Z5fBshCP41013slM8YrcThh8cME/y6otUF87GN9A45JwY8HcRLHfxpZY85V4QsGzd24z72tOXwQ4oJK4ORRJ1UP5TzMul3j3Y97KX7n/PUaTTxBT5sDagZDRNWxc0qaQeYmSz92Zj2mwHMOzvP98vtJ9BJNrj1krAl+4CyIrDyoG0mJh2utjy0CcDX9S6B/gzf35sasb7rhr+rM85wzxuJw=
   file_glob: true
   file: '$CRATE_NAME-$TRAVIS_TAG-$TARGET.*'
   on:
@@ -55,7 +56,6 @@ deploy:
     # for such targets and that's generated using the stable channel
     condition: $TRAVIS_RUST_VERSION = stable
     tags: true
-  provider: releases
   skip_cleanup: 'true'
 
 cache: cargo

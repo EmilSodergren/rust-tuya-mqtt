@@ -40,7 +40,7 @@ impl FromStr for Topic {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        let content: Vec<&str> = s.split("/").collect();
+        let content: Vec<&str> = s.split('/').collect();
         if content.len() < 5 {
             return Err(ErrorKind::TopicTooShort.into());
         };

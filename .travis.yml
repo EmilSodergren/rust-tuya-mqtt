@@ -4,6 +4,7 @@
 dist: trusty
 language: rust
 services: docker
+os:  linux
 
 env:
   global:
@@ -45,7 +46,7 @@ before_deploy:
 
 deploy:
   provider: releases
-  api-key:
+  token:
     secure: Lyz4ZHtS1nyL9FjRA2CnwxY4ndyE9j612ej+XjImRH44l8kymxNjbUeNR7MZKQP8rgOzZ3x44z1AOIBbUqmErfNs8Q0pwHjr+D6JvXfNNQIX4Yd9dmx1QwMelfUZ24/imc8gmQQUAcVZXDDR1Lp2E/xPcfi8aUiBE/TivKiLRBTtJeGtsYRevCiF973r1/9iE7k5FvAHNDmrM7zgDbc42EWMb1fJ24GqTMbhxAYwgzWoNxjGb6JqwhkG3cOaLuJMCzVDVOA92liJhCGS0724pqpQPRqJNK0rQJiaGiCBdel7Nq8XhG0FAaGZONN8BD5FyoxkznFkzIWgzQEOPg8skim5Ch/7nPRwxBHTLi7rEzZOIeY0PrsKqD+zwJOFhXAwx26p+zo+ejARTat+td9RlU5iqas32ZdghWycYXy9jDafR4dQsT+0hXeMDRcxn/gxreGV7mN5ylgKRKX623Cschs1SDnSmQs7iw2aAgAyanfwGMWGi5EguhIx0CBCNZxHR2MGntuTtkVUJt2S+PU0EcDQ8DHNoYloGxxHwQNNXgK7wGlnU85C843HXJb6qr082RQXrJhDSflplIo6TxYmqdLDL3mmULXTheSLJKPCIT/2tMIw2EowbSEZF4RhMhX3xFSotykSKKXu/lxxlcv6FIK+Imr/wNZwCwSCFxIEZps=
   file_glob: true
   file: '$CRATE_NAME-$TRAVIS_TAG-$TARGET.*'
@@ -57,7 +58,7 @@ deploy:
     condition: $TRAVIS_RUST_VERSION = stable
     repo: EmilSodergren/rust-tuya-mqtt
     tags: true
-  skip_cleanup: 'true'
+  cleanup: false
 
 cache: cargo
 before_cache:

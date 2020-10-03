@@ -61,20 +61,21 @@ fn handle_publish(publish: Publish, counter: Arc<RelaxedCounter>) -> Result<()> 
     let topic: Topic = publish
         .topic_name
         .parse()
-        .expect("Could not parse the package");
+        .context(format!("Trying to parse {}", &publish.topic_name))?;
     debug!("{:?}", topic);
-    let mqtt_state = std::str::from_utf8(&publish.payload).expect("Payload is not valid utf8");
+    let mqtt_state =
+        std::str::from_utf8(&publish.payload).context("Mqtt payload is not valid utf8")?;
     let tuya_payload = payload(&topic.tuya_id, TuyaType::Socket, &mqtt_state)
-        .expect("Could not get Payload from MQTT message");
+        .context("Could not get Payload from MQTT message")?;
     let tuya_device = TuyaDevice::create(
         &topic.tuya_ver,
         Some(&topic.tuya_key),
         Some(SocketAddr::new(topic.ip, 6668)),
     )
-    .expect("Could not create TuyaDevice");
+    .context("Could not create TuyaDevice")?;
     tuya_device
         .set(&tuya_payload, counter.inc() as u32)
-        .context("EMIL")
+        .context("Calling set on the TuyaDevice")
 }
 
 fn handle_notification(notification: Notification, counter: Arc<RelaxedCounter>) {
@@ -83,8 +84,8 @@ fn handle_notification(notification: Notification, counter: Arc<RelaxedCounter>)
         _ => Err(ErrorKind::UnhandledNotification(notification).into()),
     };
     match res {
-        Ok(_) => return,
-        Err(err) => error!("{}", &err.to_string()),
+        Ok(_) => {}
+        Err(err) => error!("{}", &err),
     };
 }
 

@@ -1,8 +1,9 @@
 use crate::error::ErrorKind;
+use anyhow::{Context, Error, Result};
 use atomic_counter::{AtomicCounter, RelaxedCounter};
 use crossbeam_channel::{bounded, select};
-use failure::Error;
-use log::{debug, info, warn};
+use failure::Fail;
+use log::{debug, error, info};
 use rumqtt::{MqttClient, MqttOptions, Notification, Publish, QoS, SecurityOptions};
 use rust_tuyapi::mesparse::TuyaDevice;
 use rust_tuyapi::{payload, TuyaType};
@@ -15,8 +16,6 @@ use std::sync::Arc;
 use std::thread;
 
 mod error;
-
-pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Deserialize, Debug)]
 struct Config {
@@ -57,7 +56,7 @@ impl FromStr for Topic {
     }
 }
 
-fn handle_publish(publish: Publish, counter: Arc<RelaxedCounter>) {
+fn handle_publish(publish: Publish, counter: Arc<RelaxedCounter>) -> Result<()> {
     info!("Received packet {:?}", &publish);
     let topic: Topic = publish
         .topic_name
@@ -75,13 +74,17 @@ fn handle_publish(publish: Publish, counter: Arc<RelaxedCounter>) {
     .expect("Could not create TuyaDevice");
     tuya_device
         .set(&tuya_payload, counter.inc() as u32)
-        .expect("Could not set value to TuyaDevice");
+        .context("EMIL")
 }
 
 fn handle_notification(notification: Notification, counter: Arc<RelaxedCounter>) {
-    match notification {
+    let res = match notification {
         Notification::Publish(publish) => handle_publish(publish, counter),
-        _ => warn!("Received unhandled notification {:?}", notification),
+        _ => Err(ErrorKind::UnhandledNotification(notification).into()),
+    };
+    match res {
+        Ok(_) => return,
+        Err(err) => error!("{}", &err.to_string()),
     };
 }
 
@@ -103,17 +106,19 @@ fn main() -> Result<()> {
         options
     };
 
-    let (mut client, notifications) = MqttClient::start(options)?;
+    let (mut client, notifications) = MqttClient::start(options).map_err(|e| e.compat())?;
 
     let (done_tx, done_rx) = bounded(1);
 
     ctrlc::set_handler(move || {
         let _ = done_tx.send(());
     })?;
-    client.subscribe(
-        format!("{}{}", config.topic, "#"),
-        QoS::from_u8(config.qos)?,
-    )?;
+    client
+        .subscribe(
+            format!("{}{}", config.topic, "#"),
+            QoS::from_u8(config.qos).map_err(|e| e.compat())?,
+        )
+        .map_err(|e| e.compat())?;
     let counter = Arc::new(RelaxedCounter::new(0));
     loop {
         select! {
@@ -124,7 +129,7 @@ fn main() -> Result<()> {
             },
             recv(done_rx) -> _ => {
                 info!("Received termination, shutting down the mqtt connection");
-                client.shutdown()?;
+                client.shutdown().map_err(|e| e.compat())?;
                 break
             },
         }

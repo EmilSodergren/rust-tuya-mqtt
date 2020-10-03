@@ -158,6 +158,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam-channel"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b153fe7cbef478c567df0f972e02e6d736db11affe43dfc9c56a9374d1adfb87"
+dependencies = [
+ "crossbeam-utils 0.7.2",
+ "maybe-uninit",
+]
+
+[[package]]
 name = "crossbeam-deque"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -939,7 +949,7 @@ dependencies = [
  "base64 0.10.1",
  "bytes",
  "chrono",
- "crossbeam-channel",
+ "crossbeam-channel 0.3.9",
  "derive_more",
  "failure",
  "futures",
@@ -960,7 +970,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "atomic-counter",
- "crossbeam-channel",
+ "crossbeam-channel 0.4.4",
  "ctrlc",
  "env_logger",
  "failure",
@@ -977,6 +987,8 @@ dependencies = [
 [[package]]
 name = "rust-tuyapi"
 version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "648ef0f7082b7efcb42e6173df5b87d0ccd010e9b330f8409a5af34a77289337"
 dependencies = [
  "atomic-counter",
  "base64 0.12.3",

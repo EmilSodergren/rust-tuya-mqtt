@@ -5,7 +5,7 @@ use crossbeam_channel::{bounded, select};
 use failure::Fail;
 use log::{debug, error, info};
 use rumqtt::{MqttClient, MqttOptions, Notification, Publish, QoS, SecurityOptions};
-use rust_tuyapi::mesparse::TuyaDevice;
+use rust_tuyapi::tuyadevice::TuyaDevice;
 use rust_tuyapi::{payload, TuyaType};
 use serde::Deserialize;
 use std::fs::File;
@@ -70,7 +70,7 @@ fn handle_publish(publish: Publish, counter: Arc<RelaxedCounter>) -> Result<()> 
     let tuya_device = TuyaDevice::create(
         &topic.tuya_ver,
         Some(&topic.tuya_key),
-        Some(SocketAddr::new(topic.ip, 6668)),
+        SocketAddr::new(topic.ip, 6668),
     )
     .context("Could not create TuyaDevice")?;
     tuya_device
@@ -85,7 +85,11 @@ fn handle_notification(notification: Notification, counter: Arc<RelaxedCounter>)
     };
     match res {
         Ok(_) => {}
-        Err(err) => error!("{}", &err),
+        Err(err) => {
+            for e in err.chain() {
+                error!("{}", e);
+            }
+        }
     };
 }
 

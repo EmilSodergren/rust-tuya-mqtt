@@ -90,9 +90,9 @@ dependencies = [
 
 [[package]]
 name = "base64"
-version = "0.12.3"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3441f0f7b02788e948e47f457ca01f1d7e6d92c693bc132c22b087d3141c03ff"
+checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "bitflags"
@@ -975,12 +975,12 @@ dependencies = [
 
 [[package]]
 name = "rust-tuyapi"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "648ef0f7082b7efcb42e6173df5b87d0ccd010e9b330f8409a5af34a77289337"
+checksum = "f1af08dd3e93c93c0c126a36d7f9903540a9ccf33b61eda706d0bbbcc189723c"
 dependencies = [
  "atomic-counter",
- "base64 0.12.3",
+ "base64 0.13.0",
  "hex",
  "json",
  "lazy_static",
@@ -993,6 +993,7 @@ dependencies = [
  "openssl",
  "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]

@@ -1003,9 +1003,9 @@ dependencies = [
 
 [[package]]
 name = "rust-tuyapi"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69549054ab0f42be1e0e6378ceb5d918671b75f9891d9e9641981eed7392ea76"
+checksum = "96c0d58e9fe88f89e168a553c84954628a5545150ed164bfa3ee83eb32681a87"
 dependencies = [
  "atomic-counter",
  "base64 0.13.0",

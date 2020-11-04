@@ -3,7 +3,7 @@ use anyhow::{Context, Error, Result};
 use atomic_counter::{AtomicCounter, RelaxedCounter};
 use crossbeam_channel::{bounded, select};
 use failure::Fail;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use rumqtt::{MqttClient, MqttOptions, Notification, Publish, QoS, SecurityOptions};
 use rust_tuyapi::tuyadevice::TuyaDevice;
 use rust_tuyapi::{payload, TuyaType};
@@ -73,9 +73,22 @@ fn handle_publish(publish: Publish, counter: Arc<RelaxedCounter>) -> Result<()> 
         SocketAddr::new(topic.ip, 6668),
     )
     .context("Could not create TuyaDevice")?;
-    tuya_device
-        .set(&tuya_payload, counter.inc() as u32)
-        .context("Calling set on the TuyaDevice")
+    set(&tuya_device, counter.inc() as u32, &tuya_payload)
+}
+
+fn set(dev: &TuyaDevice, counter: u32, payload: &str) -> Result<()> {
+    match dev.set(payload, counter) {
+        Ok(()) => Ok(()),
+        Err(rust_tuyapi::error::ErrorKind::TcpTimedOutError(_)) => {
+            warn!("Sending set command to device timed out, trying again");
+            set(dev, counter, payload)
+        }
+        Err(rust_tuyapi::error::ErrorKind::BadTcpRead) => {
+            warn!("The device did not return a valid message, trying again");
+            set(dev, counter, payload)
+        }
+        Err(e) => Err(e).context("Calling set on the TuyaDevice"),
+    }
 }
 
 fn handle_notification(notification: Notification, counter: Arc<RelaxedCounter>) {
@@ -85,11 +98,7 @@ fn handle_notification(notification: Notification, counter: Arc<RelaxedCounter>)
     };
     match res {
         Ok(_) => {}
-        Err(err) => {
-            for e in err.chain() {
-                error!("{}", e);
-            }
-        }
+        Err(err) => error!("{:?}", err),
     };
 }
 

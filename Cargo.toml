@@ -1,6 +1,6 @@
 [package]
 name = "rust-tuya-mqtt"
-version = "0.3.4"
+version = "0.4.0"
 authors = ["Emil Sodergren <EmilSodergren@users.noreply.github.com>"]
 edition = "2018"
 description = "This crate is a rust port of TheAgentK's implementation of tuya-mqtt in NodeJS"

@@ -1,18 +1,18 @@
 use crate::error::ErrorKind;
 use anyhow::{Context, Error, Result};
-use atomic_counter::{AtomicCounter, RelaxedCounter};
 use crossbeam_channel::{bounded, select};
 use failure::Fail;
 use log::{debug, error, info, warn};
-use rumqtt::{MqttClient, MqttOptions, Notification, Publish, QoS, SecurityOptions};
+use rumqtt::{
+    MqttClient, MqttOptions, Notification, PacketIdentifier, Publish, QoS, SecurityOptions,
+};
 use rust_tuyapi::tuyadevice::TuyaDevice;
 use rust_tuyapi::{payload, TuyaType};
 use serde::Deserialize;
 use std::fs::File;
 use std::io::BufReader;
-use std::net::{IpAddr, SocketAddr};
+use std::net::IpAddr;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::thread;
 
 mod error;
@@ -56,7 +56,7 @@ impl FromStr for Topic {
     }
 }
 
-fn handle_publish(publish: Publish, counter: Arc<RelaxedCounter>) -> Result<()> {
+fn handle_publish(publish: Publish) -> Result<()> {
     info!("Received packet {:?}", &publish);
     let topic: Topic = publish
         .topic_name
@@ -67,33 +67,47 @@ fn handle_publish(publish: Publish, counter: Arc<RelaxedCounter>) -> Result<()> 
         std::str::from_utf8(&publish.payload).context("Mqtt payload is not valid utf8")?;
     let tuya_payload = payload(&topic.tuya_id, TuyaType::Socket, &mqtt_state)
         .context("Could not get Payload from MQTT message")?;
-    let tuya_device = TuyaDevice::create(
-        &topic.tuya_ver,
-        Some(&topic.tuya_key),
-        SocketAddr::new(topic.ip, 6668),
+    let tuya_device = TuyaDevice::create(&topic.tuya_ver, Some(&topic.tuya_key), topic.ip)
+        .context("Could not create TuyaDevice")?;
+    set(
+        &tuya_device,
+        publish.pkid.unwrap_or(PacketIdentifier::zero()).0 as u32,
+        &tuya_payload,
     )
-    .context("Could not create TuyaDevice")?;
-    set(&tuya_device, counter.inc() as u32, &tuya_payload)
 }
 
-fn set(dev: &TuyaDevice, counter: u32, payload: &str) -> Result<()> {
-    match dev.set(payload, counter) {
+// This function sends a command to a device. It will detect a number of errors that might occur
+// due to bad behaving devices and resend the command until it get a valid response.
+fn set(dev: &TuyaDevice, pkid: u32, payload: &str) -> Result<()> {
+    use rust_tuyapi::error::ErrorKind::BadTcpRead;
+    use rust_tuyapi::error::ErrorKind::TcpError;
+    use std::io::ErrorKind as IoErrorKind;
+    use std::thread::sleep;
+    use std::time::Duration;
+    match dev.set(payload, pkid) {
         Ok(()) => Ok(()),
-        Err(rust_tuyapi::error::ErrorKind::TcpTimedOutError(_)) => {
-            warn!("Sending set command to device timed out, trying again");
-            set(dev, counter, payload)
-        }
-        Err(rust_tuyapi::error::ErrorKind::BadTcpRead) => {
+        Err(BadTcpRead) => {
             warn!("The device did not return a valid message, trying again");
-            set(dev, counter, payload)
+            set(dev, pkid, payload)
+        }
+        Err(TcpError(e)) if e.kind() == IoErrorKind::ConnectionReset => {
+            warn!("The device closed the TcpStream with a Connection Reset, trying again");
+            sleep(Duration::new(1, 0));
+            set(dev, pkid, payload)
+        }
+        Err(TcpError(e)) if e.kind() == IoErrorKind::TimedOut => {
+            warn!("The TcpStream timed out, trying again");
+            set(dev, pkid, payload)
         }
         Err(e) => Err(e).context("Calling set on the TuyaDevice"),
     }
 }
 
-fn handle_notification(notification: Notification, counter: Arc<RelaxedCounter>) {
+fn handle_notification(notification: Notification) {
     let res = match notification {
-        Notification::Publish(publish) => handle_publish(publish, counter),
+        Notification::Publish(publish) => {
+            handle_publish(publish).context("Handling publish notification.")
+        }
         _ => Err(ErrorKind::UnhandledNotification(notification).into()),
     };
     match res {
@@ -133,13 +147,11 @@ fn main() -> Result<()> {
             QoS::from_u8(config.qos).map_err(|e| e.compat())?,
         )
         .map_err(|e| e.compat())?;
-    let counter = Arc::new(RelaxedCounter::new(0));
     loop {
         select! {
             recv(notifications) -> n => {
                 let n = n?;
-                let a_counter = Arc::clone(&counter);
-                thread::spawn(|| handle_notification(n, a_counter));
+                thread::spawn(|| handle_notification(n));
             },
             recv(done_rx) -> _ => {
                 info!("Received termination, shutting down the mqtt connection");

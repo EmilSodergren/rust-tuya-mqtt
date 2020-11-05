@@ -983,10 +983,9 @@ dependencies = [
 
 [[package]]
 name = "rust-tuya-mqtt"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "anyhow",
- "atomic-counter",
  "crossbeam-channel",
  "ctrlc",
  "env_logger 0.8.1",
@@ -1003,9 +1002,9 @@ dependencies = [
 
 [[package]]
 name = "rust-tuyapi"
-version = "0.3.3"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ecbdd4ea77af831bcb4c987ab800206d04b513177467740d67b8ea7f7ee8098"
+checksum = "cbdaf5ddcbf6b10f2afd967ac10b8efc548fe0dd7d88d2e08ba9b15d4e49b6d3"
 dependencies = [
  "atomic-counter",
  "base64 0.13.0",

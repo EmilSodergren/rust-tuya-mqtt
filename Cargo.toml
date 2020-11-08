@@ -1,6 +1,6 @@
 [package]
 name = "rust-tuya-mqtt"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Emil Sodergren <EmilSodergren@users.noreply.github.com>"]
 edition = "2018"
 description = "This crate is a rust port of TheAgentK's implementation of tuya-mqtt in NodeJS"
@@ -21,6 +21,7 @@ failure = "0.1"
 log = "0.4"
 openssl = { version = "0.10", features = ["vendored"] }
 pretty_env_logger = "0.4"
+retry = "1.1"
 rumqtt = "0.31"
 rust-tuyapi = "0.4"
 serde = { version = "1.0", features = ["derive"]}

@@ -1,11 +1,9 @@
 use crate::error::ErrorKind;
-use anyhow::{Context, Error, Result};
+use anyhow::{anyhow, Context, Error, Result};
 use crossbeam_channel::{bounded, select};
 use failure::Fail;
 use log::{debug, error, info, warn};
-use rumqtt::{
-    MqttClient, MqttOptions, Notification, PacketIdentifier, Publish, QoS, SecurityOptions,
-};
+use rumqtt::{MqttClient, MqttOptions, Notification, Publish, QoS, SecurityOptions};
 use rust_tuyapi::tuyadevice::TuyaDevice;
 use rust_tuyapi::{payload, TuyaType};
 use serde::Deserialize;
@@ -16,6 +14,9 @@ use std::str::FromStr;
 use std::thread;
 
 mod error;
+
+// RETRIES will be exponential: 10ms 100ms 1000ms 10_000ms
+const RETRIES: usize = 4;
 
 #[derive(Deserialize, Debug)]
 struct Config {
@@ -57,6 +58,7 @@ impl FromStr for Topic {
 }
 
 fn handle_publish(publish: Publish) -> Result<()> {
+    use rumqtt::PacketIdentifier as PId;
     info!("Received packet {:?}", &publish);
     let topic: Topic = publish
         .topic_name
@@ -69,37 +71,41 @@ fn handle_publish(publish: Publish) -> Result<()> {
         .context("Could not get Payload from MQTT message")?;
     let tuya_device = TuyaDevice::create(&topic.tuya_ver, Some(&topic.tuya_key), topic.ip)
         .context("Could not create TuyaDevice")?;
-    set(
-        &tuya_device,
-        publish.pkid.unwrap_or(PacketIdentifier::zero()).0 as u32,
-        &tuya_payload,
-    )
+    let pkid = publish.pkid.unwrap_or_else(PId::zero).0 as u32;
+    set(&tuya_device, pkid, &tuya_payload)
 }
 
 // This function sends a command to a device. It will detect a number of errors that might occur
 // due to bad behaving devices and resend the command until it get a valid response.
 fn set(dev: &TuyaDevice, pkid: u32, payload: &str) -> Result<()> {
-    use rust_tuyapi::error::ErrorKind::BadTcpRead;
-    use rust_tuyapi::error::ErrorKind::TcpError;
-    use std::io::ErrorKind as IoErrorKind;
-    use std::thread::sleep;
-    use std::time::Duration;
-    match dev.set(payload, pkid) {
+    use retry::{delay::Exponential, retry, Error};
+    use rust_tuyapi::error::ErrorKind::{BadTcpRead, TcpError};
+    match retry(Exponential::from_millis(10).take(RETRIES), || {
+        match dev.set(payload, pkid) {
+            Ok(()) => Ok(()),
+            Err(BadTcpRead) => {
+                warn!(
+                    "The device did not return a valid response message ({}), trying again",
+                    pkid
+                );
+                Err(anyhow!(BadTcpRead))
+            }
+            Err(TcpError(e)) => {
+                warn!("The communication failed with: ({}), trying again", e);
+                Err(anyhow!(TcpError(e)))
+            }
+            Err(e) => Err(anyhow!(e)),
+        }
+    }) {
         Ok(()) => Ok(()),
-        Err(BadTcpRead) => {
-            warn!("The device did not return a valid message, trying again");
-            set(dev, pkid, payload)
-        }
-        Err(TcpError(e)) if e.kind() == IoErrorKind::ConnectionReset => {
-            warn!("The device closed the TcpStream with a Connection Reset, trying again");
-            sleep(Duration::new(1, 0));
-            set(dev, pkid, payload)
-        }
-        Err(TcpError(e)) if e.kind() == IoErrorKind::TimedOut => {
-            warn!("The TcpStream timed out, trying again");
-            set(dev, pkid, payload)
-        }
-        Err(e) => Err(e).context("Calling set on the TuyaDevice"),
+        Err(e) => match e {
+            Error::Operation {
+                error,
+                total_delay: _,
+                tries: _,
+            } => Err(error),
+            Error::Internal(s) => Err(anyhow!(s)),
+        },
     }
 }
 

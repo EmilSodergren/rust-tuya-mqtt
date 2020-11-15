@@ -1053,6 +1053,7 @@ name = "rust-tuya-mqtt"
 version = "0.4.1"
 dependencies = [
  "anyhow",
+ "chrono",
  "crossbeam-channel",
  "ctrlc",
  "env_logger 0.8.1",

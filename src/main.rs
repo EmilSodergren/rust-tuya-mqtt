@@ -3,12 +3,14 @@ use anyhow::{anyhow, Context, Error, Result};
 use crossbeam_channel::{bounded, select};
 use failure::Fail;
 use log::{debug, error, info, warn};
+use pretty_env_logger::env_logger::WriteStyle;
 use rumqtt::{MqttClient, MqttOptions, Notification, Publish, QoS, SecurityOptions};
 use rust_tuyapi::tuyadevice::TuyaDevice;
 use rust_tuyapi::{payload, TuyaType};
 use serde::Deserialize;
 use std::fs::File;
 use std::io::BufReader;
+use std::io::Write;
 use std::net::IpAddr;
 use std::str::FromStr;
 use std::thread;
@@ -122,8 +124,28 @@ fn handle_notification(notification: Notification) {
     };
 }
 
+fn initialize_logger() {
+    if let Some(s) = std::env::var("TUYA_LOG").map_or(std::env::var("RUST_LOG").ok(), |s| {
+        Some(format!("rust_tuyapi={},rust_tuya_mqtt={}", s, s))
+    }) {
+        pretty_env_logger::formatted_builder()
+            .format(|buf, record| {
+                writeln!(
+                    buf,
+                    "{} [{}] - {}",
+                    chrono::Local::now().format("%Y-%m-%dT%H:%M:%S"),
+                    record.level(),
+                    record.args()
+                )
+            })
+            .parse_filters(&s)
+            .write_style(WriteStyle::Always)
+            .init()
+    }
+}
+
 fn main() -> Result<()> {
-    pretty_env_logger::init();
+    initialize_logger();
     info!("Reading config file");
     let file_reader = BufReader::new(File::open("config.json")?);
     let config: Config = serde_json::from_reader(file_reader)?;

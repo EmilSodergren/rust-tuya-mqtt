@@ -20,10 +20,9 @@ anyhow = "1.0"
 thiserror = "1.0"
 failure = "0.1"
 log = "0.4"
-openssl = { version = "0.10", features = ["vendored"] }
 pretty_env_logger = "0.4"
-retry = "1.1"
+retry = { version = "1.2", default-features = false }
 rumqtt = "0.31"
 rust-tuyapi = "0.4"
-serde = { version = "1.0", features = ["derive"]}
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

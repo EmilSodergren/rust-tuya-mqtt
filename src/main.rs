@@ -3,6 +3,7 @@ use anyhow::{anyhow, Context, Error, Result};
 use log::{debug, error, info, warn};
 use pretty_env_logger::env_logger::WriteStyle;
 use rumqttc::{qos, Client, Event, MqttOptions, Packet, Publish};
+use rust_tuyapi::mesparse::Result as TuyaResult;
 use rust_tuyapi::tuyadevice::TuyaDevice;
 use rust_tuyapi::{payload, TuyaType};
 use serde::Deserialize;
@@ -80,27 +81,35 @@ fn handle_publish(publish: Publish) -> Result<()> {
     set(&tuya_device, pkid, &tuya_payload)
 }
 
-// This function sends a command to a device. It will detect a number of errors that might occur
-// due to bad behaving devices and resend the command until it get a valid response.
-fn set(dev: &TuyaDevice, pkid: u32, payload: &str) -> Result<()> {
-    use retry::{delay::Exponential, retry, Error};
+#[inline]
+fn print_warnings_on_failure(pkid: u32, res: &TuyaResult<()>) {
     use rust_tuyapi::error::ErrorKind::{BadTcpRead, TcpError};
-    match retry(
-        Exponential::from_millis(10).skip(SKIP).take(RETRIES),
-        || match dev.set(payload, pkid) {
-            Ok(()) => Ok(()),
-            Err(BadTcpRead) => {
+    if let Err(ref e) = res {
+        match e {
+            BadTcpRead => {
                 warn!(
                     "The device did not return a valid response message ({}), trying again",
                     pkid
                 );
-                Err(anyhow!(BadTcpRead))
             }
-            Err(TcpError(e)) => {
+            TcpError(e) => {
                 warn!("The communication failed with: ({}), trying again", e);
-                Err(anyhow!(TcpError(e)))
             }
-            Err(e) => Err(anyhow!(e)),
+            _ => (),
+        }
+    }
+}
+
+// This function sends a command to a device. It will detect a number of errors that might occur
+// due to bad behaving devices and resend the command until it get a valid response.
+fn set(dev: &TuyaDevice, pkid: u32, payload: &str) -> Result<()> {
+    use retry::{delay::Exponential, retry, Error};
+    match retry(
+        Exponential::from_millis(10).skip(SKIP).take(RETRIES),
+        || {
+            let r = dev.set(payload, pkid);
+            print_warnings_on_failure(pkid, &r);
+            r
         },
     ) {
         Ok(()) => Ok(()),
@@ -109,7 +118,7 @@ fn set(dev: &TuyaDevice, pkid: u32, payload: &str) -> Result<()> {
                 error,
                 total_delay: _,
                 tries: _,
-            } => Err(error),
+            } => Err(anyhow!(error)),
             Error::Internal(s) => Err(anyhow!(s)),
         },
     }

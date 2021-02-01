@@ -15,8 +15,9 @@ use std::thread;
 
 mod error;
 
-// RETRIES will be exponential: 10ms 100ms 1000ms 10_000ms
-const RETRIES: usize = 4;
+// RETRIES will be exponential: (skipped 10ms) 100ms 1000ms 10_000ms
+const SKIP: usize = 1;
+const RETRIES: usize = 3;
 
 #[derive(Deserialize, Debug)]
 struct Config {
@@ -85,8 +86,9 @@ fn handle_publish(publish: Publish) -> Result<()> {
 fn set(dev: &TuyaDevice, pkid: u32, payload: &str) -> Result<()> {
     use retry::{delay::Exponential, retry, Error};
     use rust_tuyapi::error::ErrorKind::{BadTcpRead, TcpError};
-    match retry(Exponential::from_millis(10).take(RETRIES), || {
-        match dev.set(payload, pkid) {
+    match retry(
+        Exponential::from_millis(10).skip(SKIP).take(RETRIES),
+        || match dev.set(payload, pkid) {
             Ok(()) => Ok(()),
             Err(BadTcpRead) => {
                 warn!(
@@ -100,8 +102,8 @@ fn set(dev: &TuyaDevice, pkid: u32, payload: &str) -> Result<()> {
                 Err(anyhow!(TcpError(e)))
             }
             Err(e) => Err(anyhow!(e)),
-        }
-    }) {
+        },
+    ) {
         Ok(()) => Ok(()),
         Err(e) => match e {
             Error::Operation {

@@ -11,7 +11,6 @@ use std::io::BufReader;
 use std::io::Write;
 use std::net::IpAddr;
 use std::str::FromStr;
-use std::thread;
 
 mod error;
 
@@ -116,20 +115,16 @@ fn set(dev: &TuyaDevice, pkid: u32, payload: &str) -> Result<()> {
     }
 }
 
-fn handle_notification(event: Event) {
-    let res = match event {
+fn handle_notification(event: Event) -> Result<()> {
+    match event {
         Event::Incoming(packet) => match packet {
             Packet::Publish(publish) => {
                 handle_publish(publish).context("Handling publish notification.")
             }
-            _ => Err(anyhow!("EMIL")),
+            _ => Err(anyhow!("Unhandled incoming packet {:?}", packet)),
         },
-        Event::Outgoing(_) => Err(anyhow!("packet")),
-    };
-    match res {
-        Ok(_) => {}
-        Err(err) => error!("{:?}", err),
-    };
+        Event::Outgoing(packet) => Err(anyhow!("Unhandled outgoing packet {:?}", packet)),
+    }
 }
 
 fn initialize_logger() {
@@ -167,14 +162,20 @@ fn main() -> anyhow::Result<()> {
 
     let (mut client, mut connection) = Client::new(options, 10);
     let mut client2 = client.clone();
-    ctrlc::set_handler(move || client2.cancel().unwrap())?;
+    ctrlc::set_handler(move || {
+        info!("Stopping the client");
+        client2.cancel().unwrap();
+    })?;
     client.subscribe(
         format!("{}{}", config.topic, "#"),
         qos(config.qos).map_err(Error::msg)?,
     )?;
     for n in connection.iter() {
         let n = n.map_err(Error::msg)?;
-        thread::spawn(|| handle_notification(n));
+        match handle_notification(n) {
+            Ok(_) => (),
+            Err(e) => error!("ERROR: {}", e),
+        }
     }
     info!("Bye!");
     Ok(())

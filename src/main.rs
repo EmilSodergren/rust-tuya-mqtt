@@ -20,12 +20,18 @@ const RETRIES: usize = 4;
 
 #[derive(Deserialize, Debug)]
 struct Config {
+    #[serde(default = "default_mqtt_id")]
+    mqtt_id: String,
     host: String,
     port: u16,
     topic: String,
     mqtt_user: String,
     mqtt_pass: String,
     qos: u8,
+}
+
+fn default_mqtt_id() -> String {
+    String::from("rust-tuya-mqtt")
 }
 
 #[derive(Debug, PartialEq)]
@@ -151,7 +157,7 @@ fn main() -> anyhow::Result<()> {
     let config: Config = serde_json::from_reader(file_reader)?;
     debug!("Read {:#?}", config);
 
-    let mut options = MqttOptions::new("rust-tuya-mqtt", config.host, config.port);
+    let mut options = MqttOptions::new(config.mqtt_id, config.host, config.port);
     options.set_keep_alive(10);
     if !config.mqtt_user.is_empty() {
         options.set_credentials(config.mqtt_user, config.mqtt_pass);
@@ -192,5 +198,36 @@ mod tests {
                 ip: "192.168.170.7".parse().unwrap(),
             },
         );
+    }
+    #[test]
+    fn config_without_mqttid() {
+        let config_json = r#"
+{
+    "host": "192.168.1.1",
+    "port": 1883,
+    "topic": "tuya/",
+    "mqtt_user": "",
+    "mqtt_pass": "",
+    "qos": 2
+}
+        "#;
+        let config: Config = serde_json::from_str(config_json).unwrap();
+        assert!(!config.mqtt_id.is_empty())
+    }
+    #[test]
+    fn config_with_mqttid() {
+        let config_json = r#"
+{
+    "mqtt_id": "test_mqtt_id",
+    "host": "192.168.1.1",
+    "port": 1883,
+    "topic": "tuya/",
+    "mqtt_user": "",
+    "mqtt_pass": "",
+    "qos": 2
+}
+        "#;
+        let config: Config = serde_json::from_str(config_json).unwrap();
+        assert!(config.mqtt_id == "test_mqtt_d")
     }
 }

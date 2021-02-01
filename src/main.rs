@@ -1,10 +1,8 @@
 use crate::error::ErrorKind;
 use anyhow::{anyhow, Context, Error, Result};
-use crossbeam_channel::{bounded, select};
-use failure::Fail;
 use log::{debug, error, info, warn};
 use pretty_env_logger::env_logger::WriteStyle;
-use rumqtt::{MqttClient, MqttOptions, Notification, Publish, QoS, SecurityOptions};
+use rumqttc::{qos, Client, Event, MqttOptions, Packet, Publish};
 use rust_tuyapi::tuyadevice::TuyaDevice;
 use rust_tuyapi::{payload, TuyaType};
 use serde::Deserialize;
@@ -60,12 +58,11 @@ impl FromStr for Topic {
 }
 
 fn handle_publish(publish: Publish) -> Result<()> {
-    use rumqtt::PacketIdentifier as PId;
     info!("Received packet {:?}", &publish);
     let topic: Topic = publish
-        .topic_name
+        .topic
         .parse()
-        .context(format!("Trying to parse {}", &publish.topic_name))?;
+        .context(format!("Trying to parse {}", &publish.topic))?;
     debug!("{:?}", topic);
     let mqtt_state =
         std::str::from_utf8(&publish.payload).context("Mqtt payload is not valid utf8")?;
@@ -73,7 +70,7 @@ fn handle_publish(publish: Publish) -> Result<()> {
         .context("Could not get Payload from MQTT message")?;
     let tuya_device = TuyaDevice::create(&topic.tuya_ver, Some(&topic.tuya_key), topic.ip)
         .context("Could not create TuyaDevice")?;
-    let pkid = publish.pkid.unwrap_or_else(PId::zero).0 as u32;
+    let pkid = publish.pkid as u32;
     set(&tuya_device, pkid, &tuya_payload)
 }
 
@@ -111,12 +108,15 @@ fn set(dev: &TuyaDevice, pkid: u32, payload: &str) -> Result<()> {
     }
 }
 
-fn handle_notification(notification: Notification) {
-    let res = match notification {
-        Notification::Publish(publish) => {
-            handle_publish(publish).context("Handling publish notification.")
-        }
-        _ => Err(ErrorKind::UnhandledNotification(notification).into()),
+fn handle_notification(event: Event) {
+    let res = match event {
+        Event::Incoming(packet) => match packet {
+            Packet::Publish(publish) => {
+                handle_publish(publish).context("Handling publish notification.")
+            }
+            _ => Err(anyhow!("EMIL")),
+        },
+        Event::Outgoing(_) => Err(anyhow!("packet")),
     };
     match res {
         Ok(_) => {}
@@ -144,49 +144,29 @@ fn initialize_logger() {
     }
 }
 
-fn main() -> Result<()> {
+fn main() -> anyhow::Result<()> {
     initialize_logger();
     info!("Reading config file");
     let file_reader = BufReader::new(File::open("config.json")?);
     let config: Config = serde_json::from_reader(file_reader)?;
     debug!("Read {:#?}", config);
 
-    let mut options =
-        MqttOptions::new("rust-tuya-mqtt", config.host, config.port).set_keep_alive(10);
-    options = if !config.mqtt_user.is_empty() {
-        options.set_security_opts(SecurityOptions::UsernamePassword(
-            config.mqtt_user,
-            config.mqtt_pass,
-        ))
-    } else {
-        options
-    };
+    let mut options = MqttOptions::new("rust-tuya-mqtt", config.host, config.port);
+    options.set_keep_alive(10);
+    if !config.mqtt_user.is_empty() {
+        options.set_credentials(config.mqtt_user, config.mqtt_pass);
+    }
 
-    let (mut client, notifications) = MqttClient::start(options).map_err(|e| e.compat())?;
-
-    let (done_tx, done_rx) = bounded(1);
-
-    ctrlc::set_handler(move || {
-        let _ = done_tx.send(());
-    })?;
-    client
-        .subscribe(
-            format!("{}{}", config.topic, "#"),
-            QoS::from_u8(config.qos).map_err(|e| e.compat())?,
-        )
-        .map_err(|e| e.compat())?;
-    loop {
-        select! {
-            recv(notifications) -> n => {
-                let n = n?;
-                thread::spawn(|| handle_notification(n));
-            },
-            recv(done_rx) -> _ => {
-                info!("Received termination, shutting down the mqtt connection");
-                client.shutdown().map_err(|e| e.compat())?;
-                break
-            },
-        }
+    let (mut client, mut connection) = Client::new(options, 10);
+    let mut client2 = client.clone();
+    ctrlc::set_handler(move || client2.cancel().unwrap())?;
+    client.subscribe(
+        format!("{}{}", config.topic, "#"),
+        qos(config.qos).map_err(Error::msg)?,
+    )?;
+    for n in connection.iter() {
+        let n = n.map_err(Error::msg)?;
+        thread::spawn(|| handle_notification(n));
     }
     info!("Bye!");
     Ok(())

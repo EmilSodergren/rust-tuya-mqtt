@@ -1,5 +1,5 @@
 # rust-tuya-mqtt
-[![Build Status](https://travis-ci.com/EmilSodergren/rust-tuya-mqtt.svg?branch=master)](https://travis-ci.com/EmilSodergren/rust-tuya-mqtt)
+![Build status](https://github.com/EmilSodergren/rust-tuya-mqtt/workflows/Mean%20Bean%20CI/badge.svg)
 
 Rust program that enables controlling of Tuya/Smart Life devices via MQTT. It uses the rust-tuyapi library to talk to the devices.
 

@@ -1,6 +1,6 @@
 use crate::error::ErrorKind;
 use anyhow::{anyhow, Context, Error, Result};
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use pretty_env_logger::env_logger::WriteStyle;
 use rumqttc::{qos, Client, Event, MqttOptions, Packet, Publish};
 use rust_tuyapi::mesparse::Result as TuyaResult;
@@ -130,9 +130,15 @@ fn handle_notification(event: Event) -> Result<()> {
             Packet::Publish(publish) => {
                 handle_publish(publish).context("Handling publish notification.")
             }
-            _ => Err(anyhow!("Unhandled incoming packet {:?}", packet)),
+            _ => {
+                trace!("Unhandled incoming packet {:?}", packet);
+                Ok(())
+            }
         },
-        Event::Outgoing(packet) => Err(anyhow!("Unhandled outgoing packet {:?}", packet)),
+        Event::Outgoing(packet) => {
+            trace!("Unhandled incoming packet {:?}", packet);
+            Ok(())
+        }
     }
 }
 

@@ -7,9 +7,9 @@ use rust_tuyapi::mesparse::Result as TuyaResult;
 use rust_tuyapi::tuyadevice::TuyaDevice;
 use rust_tuyapi::{payload, TuyaType};
 use serde::Deserialize;
+use std::fmt::Display;
 use std::fs::File;
-use std::io::BufReader;
-use std::io::Write;
+use std::io::{BufReader, Write};
 use std::net::IpAddr;
 use std::str::FromStr;
 
@@ -19,28 +19,72 @@ mod error;
 const SKIP: usize = 1;
 const RETRIES: usize = 3;
 
+static mut TUYA_DISPLAY_FULL: bool = false;
+
 #[derive(Deserialize, Debug)]
 struct Config {
     #[serde(default = "default_mqtt_id")]
     mqtt_id: String,
     host: String,
+    #[serde(default = "default_port")]
     port: u16,
     topic: String,
     mqtt_user: String,
     mqtt_pass: String,
     qos: u8,
+    #[serde(default = "default_full_display")]
+    full_display: bool,
 }
 
 fn default_mqtt_id() -> String {
     String::from("rust-tuya-mqtt")
 }
 
-#[derive(Debug, PartialEq)]
+fn default_port() -> u16 {
+    1883_u16
+}
+
+fn default_full_display() -> bool {
+    false
+}
+
+#[derive(Debug, PartialEq, Clone)]
 struct Topic {
     tuya_ver: String,
     tuya_id: String,
     tuya_key: String,
     ip: IpAddr,
+}
+
+impl Display for Topic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // TUYA_DISPLAY_FULL should be set once, when the config has been parsed
+        unsafe {
+            if TUYA_DISPLAY_FULL {
+                write!(
+                    f,
+                    "Topic: Ip: {}, Id: {}, Key: {}, Version: {}",
+                    self.ip, self.tuya_id, self.tuya_key, self.tuya_ver
+                )
+            } else {
+                write!(
+                    f,
+                    "Topic: Ip: {}, Id: xxxx{}, Key: xxxx{}, Version: {}",
+                    self.ip,
+                    scramble(&self.tuya_id),
+                    scramble(&self.tuya_key),
+                    self.tuya_ver
+                )
+            }
+        }
+    }
+}
+
+fn scramble(text: &str) -> &str {
+    if let Some((i, _)) = text.char_indices().rev().nth(5) {
+        return &text[i..];
+    }
+    text
 }
 
 impl FromStr for Topic {
@@ -65,12 +109,11 @@ impl FromStr for Topic {
 }
 
 fn handle_publish(publish: Publish) -> Result<()> {
-    info!("Received packet {:?}", &publish);
     let topic: Topic = publish
         .topic
         .parse()
         .context(format!("Trying to parse {}", &publish.topic))?;
-    debug!("{:?}", topic);
+    debug!("{}", topic);
     let mqtt_state =
         std::str::from_utf8(&publish.payload).context("Mqtt payload is not valid utf8")?;
     let tuya_payload = payload(&topic.tuya_id, TuyaType::Socket, &mqtt_state)
@@ -168,6 +211,9 @@ fn main() -> anyhow::Result<()> {
     let file_reader = BufReader::new(File::open("config.json")?);
     let config: Config = serde_json::from_reader(file_reader)?;
     debug!("Read {:#?}", config);
+    unsafe {
+        TUYA_DISPLAY_FULL = config.full_display;
+    }
 
     let mut options = MqttOptions::new(config.mqtt_id, config.host, config.port);
     options.set_keep_alive(10);

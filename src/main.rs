@@ -300,6 +300,6 @@ mod tests {
 }
         "#;
         let config: Config = serde_json::from_str(config_json).unwrap();
-        assert!(config.mqtt_id == "test_mqtt_d")
+        assert!(config.mqtt_id == "test_mqtt_id")
     }
 }

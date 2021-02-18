@@ -19,8 +19,6 @@ mod error;
 const SKIP: usize = 1;
 const RETRIES: usize = 3;
 
-static mut TUYA_DISPLAY_FULL: bool = false;
-
 #[derive(Deserialize, Debug)]
 struct Config {
     #[serde(default = "default_mqtt_id")]
@@ -32,8 +30,6 @@ struct Config {
     mqtt_user: String,
     mqtt_pass: String,
     qos: u8,
-    #[serde(default = "default_full_display")]
-    full_display: bool,
 }
 
 fn default_mqtt_id() -> String {
@@ -44,8 +40,16 @@ fn default_port() -> u16 {
     1883_u16
 }
 
-fn default_full_display() -> bool {
-    false
+struct ScramblePrint<'a>(&'a Topic);
+struct FullPrint<'a>(&'a Topic);
+
+impl Topic {
+    pub fn scramble_print(&self) -> impl Display + '_ {
+        ScramblePrint(self)
+    }
+    pub fn full_print(&self) -> impl Display + '_ {
+        FullPrint(self)
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -56,30 +60,30 @@ struct Topic {
     ip: IpAddr,
 }
 
-impl Display for Topic {
+impl Display for FullPrint<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // TUYA_DISPLAY_FULL should be set once, when the config has been parsed
-        unsafe {
-            if TUYA_DISPLAY_FULL {
-                write!(
-                    f,
-                    "Topic: Ip: {}, Id: {}, Key: {}, Version: {}",
-                    self.ip, self.tuya_id, self.tuya_key, self.tuya_ver
-                )
-            } else {
-                write!(
-                    f,
-                    "Topic: Ip: {}, Id: xxxx{}, Key: xxxx{}, Version: {}",
-                    self.ip,
-                    scramble(&self.tuya_id),
-                    scramble(&self.tuya_key),
-                    self.tuya_ver
-                )
-            }
-        }
+        write!(
+            f,
+            "Topic: Ip: {}, Id: {}, Key: {}, Version: {}",
+            self.0.ip, self.0.tuya_id, self.0.tuya_key, self.0.tuya_ver
+        )
     }
 }
 
+impl Display for ScramblePrint<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Topic: Ip: {}, Id: xxxx{}, Key: xxxx{}, Version: {}",
+            self.0.ip,
+            scramble(&self.0.tuya_id),
+            scramble(&self.0.tuya_key),
+            self.0.tuya_ver
+        )
+    }
+}
+
+/// Take the last 5 characters and prefix them with xxxx
 fn scramble(text: &str) -> &str {
     if let Some((i, _)) = text.char_indices().rev().nth(5) {
         return &text[i..];
@@ -108,12 +112,17 @@ impl FromStr for Topic {
     }
 }
 
-fn handle_publish(publish: Publish) -> Result<()> {
+fn handle_publish(publish: Publish, full_display: bool) -> Result<()> {
     let topic: Topic = publish
         .topic
         .parse()
         .context(format!("Trying to parse {}", &publish.topic))?;
-    debug!("{}", topic);
+
+    if full_display {
+        debug!("{}", topic.full_print());
+    } else {
+        debug!("{}", topic.scramble_print());
+    }
     let mqtt_state =
         std::str::from_utf8(&publish.payload).context("Mqtt payload is not valid utf8")?;
     let tuya_payload = payload(&topic.tuya_id, TuyaType::Socket, &mqtt_state)
@@ -167,11 +176,11 @@ fn set(dev: &TuyaDevice, pkid: u32, payload: &str) -> Result<()> {
     }
 }
 
-fn handle_notification(event: Event) -> Result<()> {
+fn handle_notification(event: Event, full_display: bool) -> Result<()> {
     match event {
         Event::Incoming(packet) => match packet {
             Packet::Publish(publish) => {
-                handle_publish(publish).context("Handling publish notification.")
+                handle_publish(publish, full_display).context("Handling publish notification.")
             }
             _ => {
                 trace!("Unhandled incoming packet {:?}", packet);
@@ -207,13 +216,12 @@ fn initialize_logger() {
 
 fn main() -> anyhow::Result<()> {
     initialize_logger();
+    let full_display = std::env::var("TUYA_FULL_DISPLAY").map_or_else(|_| false, |_| true);
+    info!("Full display {}", full_display);
     info!("Reading config file");
     let file_reader = BufReader::new(File::open("config.json")?);
     let config: Config = serde_json::from_reader(file_reader)?;
     debug!("Read {:#?}", config);
-    unsafe {
-        TUYA_DISPLAY_FULL = config.full_display;
-    }
 
     let mut options = MqttOptions::new(config.mqtt_id, config.host, config.port);
     options.set_keep_alive(10);
@@ -233,7 +241,7 @@ fn main() -> anyhow::Result<()> {
     )?;
     for n in connection.iter() {
         let n = n.map_err(Error::msg)?;
-        match handle_notification(n) {
+        match handle_notification(n, full_display) {
             Ok(_) => (),
             Err(e) => error!("ERROR: {}", e),
         }

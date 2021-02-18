@@ -1,4 +1,5 @@
 {
+    "mqtt_id":"test-tuya",
     "host": "192.168.1.14",
     "port": 1883,
     "topic": "tuya/",

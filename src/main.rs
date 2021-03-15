@@ -5,7 +5,7 @@ use pretty_env_logger::env_logger::WriteStyle;
 use rumqttc::{qos, Client, Event, MqttOptions, Packet, Publish};
 use rust_tuyapi::mesparse::Result as TuyaResult;
 use rust_tuyapi::tuyadevice::TuyaDevice;
-use rust_tuyapi::{payload, TuyaType};
+use rust_tuyapi::{payload, Payload, Scramble, TuyaType};
 use serde::Deserialize;
 use std::fmt::Display;
 use std::fs::File;
@@ -40,18 +40,6 @@ fn default_port() -> u16 {
     1883_u16
 }
 
-struct ScramblePrint<'a>(&'a Topic);
-struct FullPrint<'a>(&'a Topic);
-
-impl Topic {
-    pub fn scramble_print(&self) -> impl Display + '_ {
-        ScramblePrint(self)
-    }
-    pub fn full_print(&self) -> impl Display + '_ {
-        FullPrint(self)
-    }
-}
-
 #[derive(Debug, PartialEq, Clone)]
 struct Topic {
     tuya_ver: String,
@@ -60,35 +48,26 @@ struct Topic {
     ip: IpAddr,
 }
 
-impl Display for FullPrint<'_> {
+impl Display for Topic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "Topic: Ip: {}, Id: {}, Key: {}, Version: {}",
-            self.0.ip, self.0.tuya_id, self.0.tuya_key, self.0.tuya_ver
+            self.ip, self.tuya_id, self.tuya_key, self.tuya_ver
         )
     }
 }
 
-impl Display for ScramblePrint<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Topic: Ip: {}, Id: xxxx{}, Key: xxxx{}, Version: {}",
-            self.0.ip,
-            scramble(&self.0.tuya_id),
-            scramble(&self.0.tuya_key),
-            self.0.tuya_ver
-        )
+impl Scramble for Topic {
+    /// Take the last 5 characters and prefix them with xxxx
+    fn scramble(&self) -> Topic {
+        Topic {
+            tuya_ver: self.tuya_ver.clone(),
+            tuya_id: String::from("...") + Self::scramble_str(&self.tuya_id),
+            tuya_key: String::from("...") + Self::scramble_str(&self.tuya_key),
+            ip: self.ip,
+        }
     }
-}
-
-/// Take the last 5 characters and prefix them with xxxx
-fn scramble(text: &str) -> &str {
-    if let Some((i, _)) = text.char_indices().rev().nth(5) {
-        return &text[i..];
-    }
-    text
 }
 
 impl FromStr for Topic {
@@ -119,18 +98,17 @@ fn handle_publish(publish: Publish, full_display: bool) -> Result<()> {
         .context(format!("Trying to parse {}", &publish.topic))?;
 
     if full_display {
-        debug!("{}", topic.full_print());
+        debug!("{}", topic);
     } else {
-        debug!("{}", topic.scramble_print());
+        debug!("{}", topic.scramble());
     }
     let mqtt_state =
         std::str::from_utf8(&publish.payload).context("Mqtt payload is not valid utf8")?;
-    let tuya_payload = payload(&topic.tuya_id, TuyaType::Socket, &mqtt_state)
-        .context("Could not get Payload from MQTT message")?;
+    let tuya_payload = payload(&topic.tuya_id, TuyaType::Socket, &mqtt_state);
     let tuya_device = TuyaDevice::create(&topic.tuya_ver, Some(&topic.tuya_key), topic.ip)
         .context("Could not create TuyaDevice")?;
     let pkid = publish.pkid as u32;
-    set(&tuya_device, pkid, &tuya_payload)
+    set(&tuya_device, pkid, tuya_payload)
 }
 
 #[inline]
@@ -154,12 +132,12 @@ fn print_warnings_on_failure(pkid: u32, res: &TuyaResult<()>) {
 
 // This function sends a command to a device. It will detect a number of errors that might occur
 // due to bad behaving devices and resend the command until it get a valid response.
-fn set(dev: &TuyaDevice, pkid: u32, payload: &str) -> Result<()> {
+fn set(dev: &TuyaDevice, pkid: u32, payload: Payload) -> Result<()> {
     use retry::{delay::Exponential, retry, Error};
     match retry(
         Exponential::from_millis(10).skip(SKIP).take(RETRIES),
         || {
-            let r = dev.set(payload, pkid);
+            let r = dev.set(payload.clone(), pkid);
             print_warnings_on_failure(pkid, &r);
             r
         },

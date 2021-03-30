@@ -1,11 +1,12 @@
 use crate::error::ErrorKind;
+use crate::socket::payload;
 use anyhow::{anyhow, Context, Error, Result};
 use env_logger::Builder;
 use log::{debug, error, info, trace, warn};
 use rumqttc::{qos, Client, Event, MqttOptions, Packet, Publish};
 use rust_tuyapi::mesparse::Result as TuyaResult;
 use rust_tuyapi::tuyadevice::TuyaDevice;
-use rust_tuyapi::{payload, Payload, Scramble, TuyaType};
+use rust_tuyapi::{Payload, Scramble, TuyaType};
 use serde::Deserialize;
 use std::fmt::Display;
 use std::fs::File;
@@ -14,6 +15,7 @@ use std::net::IpAddr;
 use std::str::FromStr;
 
 mod error;
+mod socket;
 
 // RETRIES will be exponential: (skipped 10ms) 100ms 1000ms 10_000ms
 const SKIP: usize = 1;

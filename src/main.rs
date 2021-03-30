@@ -1,7 +1,7 @@
 use crate::error::ErrorKind;
 use anyhow::{anyhow, Context, Error, Result};
+use env_logger::Builder;
 use log::{debug, error, info, trace, warn};
-use pretty_env_logger::env_logger::WriteStyle;
 use rumqttc::{qos, Client, Event, MqttOptions, Packet, Publish};
 use rust_tuyapi::mesparse::Result as TuyaResult;
 use rust_tuyapi::tuyadevice::TuyaDevice;
@@ -176,7 +176,7 @@ fn initialize_logger() {
     if let Some(s) = std::env::var("TUYA_LOG").map_or(std::env::var("RUST_LOG").ok(), |s| {
         Some(format!("rust_tuyapi={},rust_tuya_mqtt={}", s, s))
     }) {
-        pretty_env_logger::formatted_builder()
+        Builder::new()
             .format(|buf, record| {
                 writeln!(
                     buf,
@@ -187,7 +187,6 @@ fn initialize_logger() {
                 )
             })
             .parse_filters(&s)
-            .write_style(WriteStyle::Always)
             .init()
     }
 }

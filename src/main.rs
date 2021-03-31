@@ -6,8 +6,9 @@ use log::{debug, error, info, trace, warn};
 use rumqttc::{qos, Client, Event, MqttOptions, Packet, Publish};
 use rust_tuyapi::mesparse::Result as TuyaResult;
 use rust_tuyapi::tuyadevice::TuyaDevice;
-use rust_tuyapi::{Payload, Scramble, TuyaType};
-use serde::Deserialize;
+use rust_tuyapi::{ Payload, Scramble, TuyaType};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::File;
 use std::io::{BufReader, Write};
@@ -21,7 +22,7 @@ mod socket;
 const SKIP: usize = 1;
 const RETRIES: usize = 3;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 struct Config {
     #[serde(default = "default_mqtt_id")]
     mqtt_id: String,

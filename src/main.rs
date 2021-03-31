@@ -8,7 +8,6 @@ use rust_tuyapi::mesparse::Result as TuyaResult;
 use rust_tuyapi::tuyadevice::TuyaDevice;
 use rust_tuyapi::{ Payload, Scramble, TuyaType};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::File;
 use std::io::{BufReader, Write};

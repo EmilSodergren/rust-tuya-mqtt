@@ -6,8 +6,9 @@ use log::{debug, error, info, trace, warn};
 use rumqttc::{qos, Client, Event, MqttOptions, Packet, Publish};
 use rust_tuyapi::mesparse::Result as TuyaResult;
 use rust_tuyapi::tuyadevice::TuyaDevice;
-use rust_tuyapi::{ Payload, Scramble, TuyaType};
+use rust_tuyapi::{Payload, Scramble, TuyaType};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::File;
 use std::io::{BufReader, Write};
@@ -42,11 +43,12 @@ fn default_port() -> u16 {
     1883_u16
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Deserialize, Debug, Serialize, PartialEq, Clone)]
 struct Topic {
-    tuya_ver: String,
-    tuya_id: String,
-    tuya_key: String,
+    name: String,
+    version: String,
+    id: String,
+    key: String,
     ip: IpAddr,
 }
 
@@ -55,7 +57,7 @@ impl Display for Topic {
         write!(
             f,
             "Topic: Ip: {}, Id: {}, Key: {}, Version: {}",
-            self.ip, self.tuya_id, self.tuya_key, self.tuya_ver
+            self.ip, self.id, self.key, self.version
         )
     }
 }
@@ -64,9 +66,10 @@ impl Scramble for Topic {
     /// Take the last 5 characters and prefix them with xxxx
     fn scramble(&self) -> Topic {
         Topic {
-            tuya_ver: self.tuya_ver.clone(),
-            tuya_id: String::from("...") + Self::scramble_str(&self.tuya_id),
-            tuya_key: String::from("...") + Self::scramble_str(&self.tuya_key),
+            name: self.name.clone(),
+            version: self.version.clone(),
+            id: String::from("...") + Self::scramble_str(&self.id),
+            key: String::from("...") + Self::scramble_str(&self.key),
             ip: self.ip,
         }
     }
@@ -80,14 +83,12 @@ impl FromStr for Topic {
         if content.len() < 5 {
             return Err(ErrorKind::TopicTooShort.into());
         };
-        if content[0] != "tuya" {
-            return Err(ErrorKind::NotATuyaTopic.into());
-        };
 
         Ok(Topic {
-            tuya_ver: content[1].to_string(),
-            tuya_id: content[2].to_string(),
-            tuya_key: content[3].to_string(),
+            name: "".to_string(),
+            version: content[1].to_string(),
+            id: content[2].to_string(),
+            key: content[3].to_string(),
             ip: content[4].parse()?,
         })
     }
@@ -106,8 +107,8 @@ fn handle_publish(publish: Publish, full_display: bool) -> Result<()> {
     }
     let mqtt_state =
         std::str::from_utf8(&publish.payload).context("Mqtt payload is not valid utf8")?;
-    let tuya_payload = payload(&topic.tuya_id, TuyaType::Socket, &mqtt_state);
-    let tuya_device = TuyaDevice::create(&topic.tuya_ver, Some(&topic.tuya_key), topic.ip)
+    let tuya_payload = payload(&topic.id, TuyaType::Socket, &mqtt_state);
+    let tuya_device = TuyaDevice::create(&topic.version, Some(&topic.key), topic.ip)
         .context("Could not create TuyaDevice")?;
     let pkid = publish.pkid as u32;
     set(&tuya_device, pkid, tuya_payload)
@@ -196,11 +197,19 @@ fn initialize_logger() {
 fn main() -> anyhow::Result<()> {
     initialize_logger();
     let full_display = std::env::var("TUYA_FULL_DISPLAY").map_or_else(|_| false, |_| true);
-    info!("Full display {}", full_display);
+    info!("Full display {} - set with TUYA_FULL_DISPLAY", full_display);
     info!("Reading config file");
     let file_reader = BufReader::new(File::open("config.json")?);
     let config: Config = serde_json::from_reader(file_reader)?;
     debug!("Read {:#?}", config);
+
+    let file_reader = BufReader::new(File::open("devices.json")?);
+    let topic_config: Vec<Topic> = serde_json::from_reader(file_reader)?;
+    let mut topic_map: HashMap<String, Topic> = HashMap::new();
+    for topic in topic_config.into_iter() {
+        topic_map.insert(topic.name.clone(), topic);
+    }
+    debug!("Read {:#?}", topic_map);
 
     let mut options = MqttOptions::new(config.mqtt_id, config.host, config.port);
     options.set_keep_alive(10);
@@ -243,9 +252,10 @@ mod tests {
         assert_eq!(
             topic,
             Topic {
-                tuya_ver: "ver3.3".to_string(),
-                tuya_id: "545c7250ecf8bc58a8fd".to_string(),
-                tuya_key: "6597042c66252228".to_string(),
+                name: "".to_string(),
+                version: "ver3.3".to_string(),
+                id: "545c7250ecf8bc58a8fd".to_string(),
+                key: "6597042c66252228".to_string(),
                 ip: "192.168.170.7".parse().unwrap(),
             },
         );

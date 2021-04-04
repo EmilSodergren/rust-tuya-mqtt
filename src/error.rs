@@ -4,6 +4,4 @@ use thiserror::Error;
 pub enum ErrorKind {
     #[error("Topic too short")]
     TopicTooShort,
-    #[error("Not a tuya Topic")]
-    NotATuyaTopic,
 }

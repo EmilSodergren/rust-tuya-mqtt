@@ -1,4 +1,3 @@
-use crate::error::ErrorKind;
 use crate::socket::payload;
 use anyhow::{anyhow, Context, Error, Result};
 use env_logger::Builder;
@@ -13,14 +12,14 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::{BufReader, Write};
 use std::net::IpAddr;
-use std::str::FromStr;
 
-mod error;
 mod socket;
 
 // RETRIES will be exponential: (skipped 10ms) 100ms 1000ms 10_000ms
 const SKIP: usize = 1;
 const RETRIES: usize = 3;
+
+type DeviceMap = HashMap<String, DeviceInfo>;
 
 #[derive(Deserialize, Serialize, Debug)]
 struct Config {
@@ -29,10 +28,15 @@ struct Config {
     host: String,
     #[serde(default = "default_port")]
     port: u16,
+    #[serde(default = "default_topic")]
     topic: String,
     mqtt_user: String,
     mqtt_pass: String,
     qos: u8,
+}
+
+fn default_topic() -> String {
+    String::from("tuya/")
 }
 
 fn default_mqtt_id() -> String {
@@ -44,7 +48,7 @@ fn default_port() -> u16 {
 }
 
 #[derive(Deserialize, Debug, Serialize, PartialEq, Clone)]
-struct Topic {
+struct DeviceInfo {
     name: String,
     version: String,
     id: String,
@@ -52,7 +56,7 @@ struct Topic {
     ip: IpAddr,
 }
 
-impl Display for Topic {
+impl Display for DeviceInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -62,10 +66,10 @@ impl Display for Topic {
     }
 }
 
-impl Scramble for Topic {
+impl Scramble for DeviceInfo {
     /// Take the last 5 characters and prefix them with xxxx
-    fn scramble(&self) -> Topic {
-        Topic {
+    fn scramble(&self) -> DeviceInfo {
+        DeviceInfo {
             name: self.name.clone(),
             version: self.version.clone(),
             id: String::from("...") + Self::scramble_str(&self.id),
@@ -75,29 +79,31 @@ impl Scramble for Topic {
     }
 }
 
-impl FromStr for Topic {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self> {
+impl DeviceInfo {
+    fn from_str_and_devices(s: &str, devs: &DeviceMap) -> Result<Self> {
         let content: Vec<&str> = s.split('/').collect();
-        if content.len() < 5 {
-            return Err(ErrorKind::TopicTooShort.into());
-        };
-
-        Ok(Topic {
-            name: "".to_string(),
-            version: content[1].to_string(),
-            id: content[2].to_string(),
-            key: content[3].to_string(),
-            ip: content[4].parse()?,
-        })
+        // First try to match the topic name against entries in the DeviceMap
+        if content.len() > 2 {
+            if let Some(topic) = devs.get(content[content.len() - 2]) {
+                return Ok(topic.clone());
+            }
+        }
+        // Then try to parse the topic as a device
+        if content.len() > 5 {
+            return Ok(DeviceInfo {
+                name: "".to_string(),
+                version: content[1].to_string(),
+                id: content[2].to_string(),
+                key: content[3].to_string(),
+                ip: content[4].parse()?,
+            });
+        }
+        Err(anyhow!("Not a valid Topic"))
     }
 }
 
-fn handle_publish(publish: Publish, full_display: bool) -> Result<()> {
-    let topic: Topic = publish
-        .topic
-        .parse()
+fn handle_publish(publish: Publish, devices: &DeviceMap, full_display: bool) -> Result<()> {
+    let topic: DeviceInfo = DeviceInfo::from_str_and_devices(&publish.topic, devices)
         .context(format!("Trying to parse {}", &publish.topic))?;
 
     if full_display {
@@ -157,12 +163,11 @@ fn set(dev: &TuyaDevice, pkid: u32, payload: Payload) -> Result<()> {
     }
 }
 
-fn handle_notification(event: Event, full_display: bool) -> Result<()> {
+fn handle_notification(event: Event, devices: &DeviceMap, full_display: bool) -> Result<()> {
     match event {
         Event::Incoming(packet) => match packet {
-            Packet::Publish(publish) => {
-                handle_publish(publish, full_display).context("Handling publish notification.")
-            }
+            Packet::Publish(publish) => handle_publish(publish, devices, full_display)
+                .context("Handling publish notification."),
             _ => {
                 trace!("Unhandled incoming packet {:?}", packet);
                 Ok(())
@@ -199,17 +204,20 @@ fn main() -> anyhow::Result<()> {
     let full_display = std::env::var("TUYA_FULL_DISPLAY").map_or_else(|_| false, |_| true);
     info!("Full display {} - set with TUYA_FULL_DISPLAY", full_display);
     info!("Reading config file");
-    let file_reader = BufReader::new(File::open("config.json")?);
-    let config: Config = serde_json::from_reader(file_reader)?;
+    let config: Config = serde_json::from_reader(BufReader::new(File::open("config.json")?))?;
     debug!("Read {:#?}", config);
 
-    let file_reader = BufReader::new(File::open("devices.json")?);
-    let topic_config: Vec<Topic> = serde_json::from_reader(file_reader)?;
-    let mut topic_map: HashMap<String, Topic> = HashMap::new();
-    for topic in topic_config.into_iter() {
-        topic_map.insert(topic.name.clone(), topic);
+    // Read the devices.json configuration file if it exist
+    let mut devices: DeviceMap = HashMap::new();
+    if let Ok(file) = File::open("devices.json") {
+        info!("Reading devices from file");
+        let file_reader = BufReader::new(file);
+        let topic_config: Vec<DeviceInfo> = serde_json::from_reader(file_reader)?;
+        for topic in topic_config.into_iter() {
+            devices.insert(topic.name.clone(), topic);
+        }
+        debug!("Read Devices {:#?}", devices);
     }
-    debug!("Read {:#?}", topic_map);
 
     let mut options = MqttOptions::new(config.mqtt_id, config.host, config.port);
     options.set_keep_alive(10);
@@ -224,12 +232,12 @@ fn main() -> anyhow::Result<()> {
         client2.cancel().unwrap();
     })?;
     client.subscribe(
-        format!("{}{}", config.topic, "#"),
+        format!("{}#", config.topic),
         qos(config.qos).map_err(Error::msg)?,
     )?;
     for n in connection.iter() {
         let n = n.map_err(Error::msg)?;
-        match handle_notification(n, full_display) {
+        match handle_notification(n, &devices, full_display) {
             Ok(_) => (),
             Err(e) => error!("ERROR: {}", e),
         }
@@ -243,15 +251,18 @@ mod tests {
     use super::*;
     #[test]
     fn topic_from_string() {
-        assert!(Topic::from_str("ayut/ver3.3/adf").is_err());
-        assert!(Topic::from_str("tuya/ver3.3/adf/18356").is_err());
-        let topic = Topic::from_str(
+        assert!(DeviceInfo::from_str_and_devices("ayut/ver3.3/adf", &DeviceMap::new()).is_err());
+        assert!(
+            DeviceInfo::from_str_and_devices("tuya/ver3.3/adf/18356", &DeviceMap::new()).is_err()
+        );
+        let topic = DeviceInfo::from_str_and_devices(
             "tuya/ver3.3/545c7250ecf8bc58a8fd/6597042c66252228/192.168.170.7/command",
+            &DeviceMap::new(),
         )
         .unwrap();
         assert_eq!(
             topic,
-            Topic {
+            DeviceInfo {
                 name: "".to_string(),
                 version: "ver3.3".to_string(),
                 id: "545c7250ecf8bc58a8fd".to_string(),

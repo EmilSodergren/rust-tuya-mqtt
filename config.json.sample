@@ -1,9 +1,9 @@
 {
-    "mqtt_id":"test-tuya",
-    "host": "192.168.1.14",
+    "mqtt_id": "rust-tuya-mqtt",
+    "host": "localhost",
     "port": 1883,
     "topic": "tuya/",
     "mqtt_user": "",
     "mqtt_pass": "",
-    "qos": 2
+    "qos": 0
 }

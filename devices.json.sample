@@ -1,0 +1,9 @@
+[
+    {
+        "name": "my_awesome_device",
+        "id": "<tuya_id_hex>",
+        "ip": "tuya_ip_address",
+        "key": "<tuya_key_hex>",
+        "version": "3.3"
+    }
+]

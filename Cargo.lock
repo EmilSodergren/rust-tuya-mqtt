@@ -676,7 +676,7 @@ dependencies = [
 
 [[package]]
 name = "rust-tuya-mqtt"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -694,9 +694,9 @@ dependencies = [
 
 [[package]]
 name = "rust-tuyapi"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed83028fbf52bf58ba5b82a37000de35ecc994c2b8003e554d8ea2ee4acae9f6"
+checksum = "0a5caf6e5f7c7dd81b0dbbdc99b9f16a0f447c4ab8c5c55edc87a98d7190eda3"
 dependencies = [
  "atomic-counter",
  "base64",

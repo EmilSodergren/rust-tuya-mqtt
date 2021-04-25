@@ -1,6 +1,6 @@
 [package]
 name = "rust-tuya-mqtt"
-version = "0.6.1"
+version = "0.7.0"
 authors = ["Emil Sodergren <EmilSodergren@users.noreply.github.com>"]
 edition = "2018"
 description = "This crate is a rust port of TheAgentK's implementation of tuya-mqtt in NodeJS"
@@ -21,6 +21,6 @@ thiserror = "1.0"
 log = "0.4"
 retry = { version = "1.2", default-features = false }
 rumqttc = "0.5"
-rust-tuyapi = "0.6"
+rust-tuyapi = "0.7"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

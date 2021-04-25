@@ -1,4 +1,5 @@
-use rust_tuyapi::{Payload, PayloadStruct, TuyaType};
+use crate::TuyaType;
+use rust_tuyapi::{Payload, PayloadStruct};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;

@@ -3,9 +3,9 @@ use anyhow::{anyhow, Context, Error, Result};
 use env_logger::Builder;
 use log::{debug, error, info, trace, warn};
 use rumqttc::{qos, Client, Event, MqttOptions, Packet, Publish};
-use rust_tuyapi::mesparse::Result as TuyaResult;
+use rust_tuyapi::Result as TuyaResult;
 use rust_tuyapi::tuyadevice::TuyaDevice;
-use rust_tuyapi::{Payload, Scramble, TuyaType};
+use rust_tuyapi::{Payload, Truncate};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -18,6 +18,10 @@ mod socket;
 // RETRIES will be exponential: (skipped 10ms) 100ms 1000ms 10_000ms
 const SKIP: usize = 1;
 const RETRIES: usize = 3;
+
+pub enum TuyaType {
+    Socket,
+}
 
 type DeviceMap = HashMap<String, DeviceInfo>;
 
@@ -66,14 +70,14 @@ impl Display for DeviceInfo {
     }
 }
 
-impl Scramble for DeviceInfo {
+impl Truncate for DeviceInfo {
     /// Take the last 5 characters and prefix them with xxxx
-    fn scramble(&self) -> DeviceInfo {
+    fn truncate(&self) -> DeviceInfo {
         DeviceInfo {
             name: self.name.clone(),
             version: self.version.clone(),
-            id: String::from("...") + Self::scramble_str(&self.id),
-            key: String::from("...") + Self::scramble_str(&self.key),
+            id: String::from("...") + Self::truncate_str(&self.id),
+            key: String::from("...") + Self::truncate_str(&self.key),
             ip: self.ip,
         }
     }
@@ -109,7 +113,7 @@ fn handle_publish(publish: Publish, devices: &DeviceMap, full_display: bool) -> 
     if full_display {
         debug!("{}", topic);
     } else {
-        debug!("{}", topic.scramble());
+        debug!("{}", topic.truncate());
     }
     let mqtt_state =
         std::str::from_utf8(&publish.payload).context("Mqtt payload is not valid utf8")?;

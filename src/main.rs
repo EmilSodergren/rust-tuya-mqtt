@@ -3,8 +3,8 @@ use anyhow::{anyhow, Context, Error, Result};
 use env_logger::Builder;
 use log::{debug, error, info, trace, warn};
 use rumqttc::{qos, Client, Event, MqttOptions, Packet, Publish};
-use rust_tuyapi::Result as TuyaResult;
 use rust_tuyapi::tuyadevice::TuyaDevice;
+use rust_tuyapi::Result as TuyaResult;
 use rust_tuyapi::{Payload, Truncate};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -212,13 +212,13 @@ fn main() -> anyhow::Result<()> {
     debug!("Read {:#?}", config);
 
     // Read the devices.json configuration file if it exist
-    let mut devices: DeviceMap = HashMap::new();
+    let mut device_map: DeviceMap = HashMap::new();
     if let Ok(file) = File::open("devices.json") {
         info!("Reading devices from file");
         let file_reader = BufReader::new(file);
-        let topic_config: Vec<DeviceInfo> = serde_json::from_reader(file_reader)?;
-        for topic in topic_config.into_iter() {
-            devices.insert(topic.name.clone(), topic);
+        let devices: Vec<DeviceInfo> = serde_json::from_reader(file_reader)?;
+        for device in devices.iter() {
+            device_map.insert(device.name.clone(), device.clone());
         }
         debug!("Read Devices {:#?}", devices);
     }
@@ -240,11 +240,15 @@ fn main() -> anyhow::Result<()> {
         qos(config.qos).map_err(Error::msg)?,
     )?;
     for n in connection.iter() {
-        let n = n.map_err(Error::msg)?;
-        match handle_notification(n, &devices, full_display) {
-            Ok(_) => (),
-            Err(e) => error!("ERROR: {}", e),
-        }
+        // Give each thread a clone of the devices
+        let devs = device_map.clone();
+        std::thread::spawn(move || match n {
+            Ok(n) => match handle_notification(n, &devs, full_display) {
+                Ok(_) => (),
+                Err(e) => error!("{}", e),
+            },
+            Err(e) => error!("{}", e),
+        });
     }
     info!("Bye!");
     Ok(())

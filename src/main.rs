@@ -71,7 +71,7 @@ impl Display for DeviceInfo {
 }
 
 impl Truncate for DeviceInfo {
-    /// Take the last 5 characters and prefix them with xxxx
+    /// Take the last 5 characters and prefix them with "..."
     fn truncate(&self) -> DeviceInfo {
         DeviceInfo {
             name: self.name.clone(),
@@ -185,7 +185,9 @@ fn handle_notification(event: Event, devices: &DeviceMap, full_display: bool) ->
 }
 
 fn initialize_logger() {
-    if let Some(s) = std::env::var("TUYA_LOG").map_or(std::env::var("RUST_LOG").ok(), |s| {
+    use std::env::var;
+    // Make it possible to declare TUYA_LOG as an easier logger filter
+    if let Some(s) = var("TUYA_LOG").map_or(var("RUST_LOG").ok(), |s| {
         Some(format!("rust_tuyapi={},rust_tuya_mqtt={}", s, s))
     }) {
         Builder::new()
@@ -206,7 +208,10 @@ fn initialize_logger() {
 fn main() -> anyhow::Result<()> {
     initialize_logger();
     let full_display = std::env::var("TUYA_FULL_DISPLAY").map_or_else(|_| false, |_| true);
-    info!("Full display {} - set with TUYA_FULL_DISPLAY", full_display);
+    info!(
+        "Full display {} - declare env variable TUYA_FULL_DISPLAY to set",
+        full_display
+    );
     info!("Reading config file");
     let config: Config = serde_json::from_reader(BufReader::new(File::open("config.json")?))?;
     debug!("Read {:#?}", config);

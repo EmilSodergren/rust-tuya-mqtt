@@ -246,14 +246,19 @@ fn main() -> anyhow::Result<()> {
     )?;
     for n in connection.iter() {
         // Give each thread a clone of the devices
-        let devs = device_map.clone();
-        std::thread::spawn(move || match n {
-            Ok(n) => match handle_notification(n, &devs, full_display) {
-                Ok(_) => (),
-                Err(e) => error!("{}", e),
-            },
-            Err(e) => error!("{}", e),
-        });
+        match n {
+            Ok(n) => {
+                let devs = device_map.clone();
+                std::thread::spawn(move || match handle_notification(n, &devs, full_display) {
+                    Ok(_) => (),
+                    Err(e) => error!("{}", e),
+                });
+            }
+            Err(e) => {
+                error!("{}", e);
+                std::thread::sleep(std::time::Duration::from_secs(5));
+            }
+        };
     }
     info!("Bye!");
     Ok(())

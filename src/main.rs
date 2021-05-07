@@ -180,7 +180,7 @@ fn handle_notification(event: Event, devices: &DeviceMap, full_display: bool) ->
             }
         },
         Event::Outgoing(packet) => {
-            trace!("Unhandled incoming packet {:?}", packet);
+            trace!("Unhandled outgoing packet {:?}", packet);
             Ok(())
         }
     }

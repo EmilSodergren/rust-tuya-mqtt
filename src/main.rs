@@ -12,6 +12,8 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::{BufReader, Write};
 use std::net::IpAddr;
+use std::sync::Arc;
+use std::thread;
 
 mod socket;
 
@@ -205,6 +207,18 @@ fn initialize_logger() {
     }
 }
 
+fn read_devices(file: File) -> Result<Arc<DeviceMap>> {
+    let mut map: DeviceMap = HashMap::new();
+    info!("Reading devices from file");
+    let file_reader = BufReader::new(file);
+    let devices: Vec<DeviceInfo> = serde_json::from_reader(file_reader)?;
+    for device in devices.iter() {
+        map.insert(device.name.clone(), device.clone());
+    }
+    debug!("Read Devices {:#?}", devices);
+    Ok(Arc::new(map))
+}
+
 fn main() -> anyhow::Result<()> {
     initialize_logger();
     let full_display = std::env::var("TUYA_FULL_DISPLAY").map_or_else(|_| false, |_| true);
@@ -216,17 +230,9 @@ fn main() -> anyhow::Result<()> {
     let config: Config = serde_json::from_reader(BufReader::new(File::open("config.json")?))?;
     debug!("Read {:#?}", config);
 
-    // Read the devices.json configuration file if it exist
-    let mut device_map: DeviceMap = HashMap::new();
-    if let Ok(file) = File::open("devices.json") {
-        info!("Reading devices from file");
-        let file_reader = BufReader::new(file);
-        let devices: Vec<DeviceInfo> = serde_json::from_reader(file_reader)?;
-        for device in devices.iter() {
-            device_map.insert(device.name.clone(), device.clone());
-        }
-        debug!("Read Devices {:#?}", devices);
-    }
+    // Read the devices.json configuration file if it exist, set empty device map otherwise
+    let device_map =
+        File::open("devices.json").map_or(Ok(Arc::new(DeviceMap::new())), read_devices)?;
 
     let mut options = MqttOptions::new(config.mqtt_id, config.host, config.port);
     options.set_keep_alive(10);
@@ -245,18 +251,18 @@ fn main() -> anyhow::Result<()> {
         qos(config.qos).map_err(Error::msg)?,
     )?;
     for n in connection.iter() {
-        // Give each thread a clone of the devices
         match n {
             Ok(n) => {
-                let devs = device_map.clone();
-                std::thread::spawn(move || match handle_notification(n, &devs, full_display) {
+                // Give each thread an Arc of the devices
+                let map = device_map.clone();
+                thread::spawn(move || match handle_notification(n, &map, full_display) {
                     Ok(_) => (),
                     Err(e) => error!("{}", e),
                 });
             }
             Err(e) => {
                 error!("{}", e);
-                std::thread::sleep(std::time::Duration::from_secs(5));
+                thread::sleep(std::time::Duration::from_secs(5));
             }
         };
     }

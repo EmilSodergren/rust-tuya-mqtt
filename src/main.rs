@@ -64,11 +64,11 @@ struct DeviceInfo {
 
 impl Display for DeviceInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Topic: Ip: {}, Id: {}, Key: {}, Version: {}",
-            self.ip, self.id, self.key, self.version
-        )
+        if std::env::var("TUYA_FULL_DISPLAY").map_or_else(|_| false, |_| true) {
+            write!(f, "{}", serde_json::to_string(self).unwrap())
+        } else {
+            write!(f, "{}", serde_json::to_string(&self.truncate()).unwrap())
+        }
     }
 }
 
@@ -112,11 +112,7 @@ fn handle_publish(publish: Publish, devices: &DeviceMap, full_display: bool) -> 
     let topic: DeviceInfo = DeviceInfo::from_str_and_devices(&publish.topic, devices)
         .context(format!("Trying to parse {}", &publish.topic))?;
 
-    if full_display {
-        debug!("{}", topic);
-    } else {
-        debug!("{}", topic.truncate());
-    }
+    debug!("{}", dev_info);
     let mqtt_state =
         std::str::from_utf8(&publish.payload).context("Mqtt payload is not valid utf8")?;
     let tuya_payload = payload(&topic.id, TuyaType::Socket, &mqtt_state);
@@ -215,7 +211,8 @@ fn read_devices(file: File) -> Result<Arc<DeviceMap>> {
     for device in devices.iter() {
         map.insert(device.name.clone(), device.clone());
     }
-    debug!("Read Devices {:#?}", devices);
+    debug!("Read Devices:");
+    devices.iter().for_each(|dev| debug!("{}", dev));
     Ok(Arc::new(map))
 }
 

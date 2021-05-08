@@ -145,14 +145,15 @@ fn print_warnings_on_failure(pkid: u32, res: &TuyaResult<()>) {
 // due to bad behaving devices and resend the command until it get a valid response.
 fn set(dev: &TuyaDevice, pkid: u32, payload: Payload) -> Result<()> {
     use retry::{delay::Exponential, retry, Error};
-    match retry(
-        Exponential::from_millis(10).skip(SKIP).take(RETRIES),
-        || {
-            let r = dev.set(payload.clone(), pkid);
-            print_warnings_on_failure(pkid, &r);
-            r
-        },
-    ) {
+
+    let delay = Exponential::from_millis(10).skip(SKIP).take(RETRIES);
+    let try_set_payload = || {
+        let r = dev.set(payload.clone(), pkid);
+        print_warnings_on_failure(pkid, &r);
+        r
+    };
+
+    match retry(delay, try_set_payload) {
         Ok(()) => Ok(()),
         Err(e) => match e {
             Error::Operation {

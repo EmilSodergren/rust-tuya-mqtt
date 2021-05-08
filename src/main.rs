@@ -219,10 +219,9 @@ fn read_devices(file: File) -> Result<Arc<DeviceMap>> {
 
 fn main() -> anyhow::Result<()> {
     initialize_logger();
-    let full_display = std::env::var("TUYA_FULL_DISPLAY").map_or_else(|_| false, |_| true);
     info!(
         "Full display {} - declare env variable TUYA_FULL_DISPLAY to set",
-        full_display
+        std::env::var("TUYA_FULL_DISPLAY").map_or_else(|_| false, |_| true)
     );
     info!("Reading config file");
     let config: Config = serde_json::from_reader(BufReader::new(File::open("config.json")?))

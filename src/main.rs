@@ -14,6 +14,7 @@ use std::io::{BufReader, Write};
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 
 mod socket;
 
@@ -264,7 +265,7 @@ fn main() -> anyhow::Result<()> {
             }
             Err(e) => {
                 error!("{}", e);
-                thread::sleep(std::time::Duration::from_secs(5));
+                thread::sleep(Duration::from_secs(5));
             }
         };
     }

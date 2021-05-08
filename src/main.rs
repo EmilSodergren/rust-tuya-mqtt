@@ -108,15 +108,15 @@ impl DeviceInfo {
     }
 }
 
-fn handle_publish(publish: Publish, devices: &DeviceMap, full_display: bool) -> Result<()> {
-    let topic: DeviceInfo = DeviceInfo::from_str_and_devices(&publish.topic, devices)
-        .context(format!("Trying to parse {}", &publish.topic))?;
+fn handle_publish(publish: Publish, devices: &DeviceMap) -> Result<()> {
+    let dev_info: DeviceInfo = DeviceInfo::from_str_and_devices(&publish.topic, devices)
+        .context(format!("Could not parse {}", &publish.topic))?;
 
     debug!("{}", dev_info);
     let mqtt_state =
         std::str::from_utf8(&publish.payload).context("Mqtt payload is not valid utf8")?;
-    let tuya_payload = payload(&topic.id, TuyaType::Socket, &mqtt_state);
-    let tuya_device = TuyaDevice::create(&topic.version, Some(&topic.key), topic.ip)
+    let tuya_payload = payload(&dev_info.id, TuyaType::Socket, &mqtt_state);
+    let tuya_device = TuyaDevice::create(&dev_info.version, Some(&dev_info.key), dev_info.ip)
         .context("Could not create TuyaDevice")?;
     let pkid = publish.pkid as u32;
     set(&tuya_device, pkid, tuya_payload)
@@ -165,11 +165,12 @@ fn set(dev: &TuyaDevice, pkid: u32, payload: Payload) -> Result<()> {
     }
 }
 
-fn handle_notification(event: Event, devices: &DeviceMap, full_display: bool) -> Result<()> {
+fn handle_notification(event: Event, devices: &DeviceMap) -> Result<()> {
     match event {
         Event::Incoming(packet) => match packet {
-            Packet::Publish(publish) => handle_publish(publish, devices, full_display)
-                .context("Handling publish notification."),
+            Packet::Publish(publish) => {
+                handle_publish(publish, devices).context("Handling publish notification.")
+            }
             _ => {
                 trace!("Unhandled incoming packet {:?}", packet);
                 Ok(())
@@ -224,12 +225,14 @@ fn main() -> anyhow::Result<()> {
         full_display
     );
     info!("Reading config file");
-    let config: Config = serde_json::from_reader(BufReader::new(File::open("config.json")?))?;
+    let config: Config = serde_json::from_reader(BufReader::new(File::open("config.json")?))
+        .context("Badly formatted config.json")?;
     debug!("Read {:#?}", config);
 
     // Read the devices.json configuration file if it exist, set empty device map otherwise
-    let device_map =
-        File::open("devices.json").map_or(Ok(Arc::new(DeviceMap::new())), read_devices)?;
+    let device_map = File::open("devices.json")
+        .map_or(Ok(Arc::new(DeviceMap::new())), read_devices)
+        .context("Badly formatted devices.json")?;
 
     let mut options = MqttOptions::new(config.mqtt_id, config.host, config.port);
     options.set_keep_alive(10);
@@ -252,7 +255,7 @@ fn main() -> anyhow::Result<()> {
             Ok(n) => {
                 // Give each thread an Arc of the devices
                 let map = device_map.clone();
-                thread::spawn(move || match handle_notification(n, &map, full_display) {
+                thread::spawn(move || match handle_notification(n, &map) {
                     Ok(_) => (),
                     Err(e) => error!("{}", e),
                 });

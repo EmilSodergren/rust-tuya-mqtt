@@ -247,7 +247,9 @@ fn main() -> anyhow::Result<()> {
     })?;
     client.subscribe(
         format!("{}#", config.topic),
-        qos(config.qos).map_err(Error::msg)?,
+        qos(config.qos)
+            .map_err(Error::msg)
+            .context("Could not set MQTT QoS")?,
     )?;
     for n in connection.iter() {
         match n {

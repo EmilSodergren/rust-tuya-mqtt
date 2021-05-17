@@ -12,6 +12,7 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::{BufReader, Write};
 use std::net::IpAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -22,8 +23,17 @@ mod socket;
 const SKIP: usize = 1;
 const RETRIES: usize = 3;
 
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
 pub enum TuyaType {
     Socket,
+}
+
+impl FromStr for TuyaType {
+    type Err = serde_json::error::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(s)
+    }
 }
 
 type DeviceMap = HashMap<String, DeviceInfo>;
@@ -54,13 +64,19 @@ fn default_port() -> u16 {
     1883_u16
 }
 
+fn default_devtype() -> TuyaType {
+    TuyaType::Socket
+}
+
 #[derive(Deserialize, Debug, Serialize, PartialEq, Clone)]
 struct DeviceInfo {
+    #[serde(default = "default_devtype")]
+    dev_type: TuyaType,
+    id: String,
+    ip: IpAddr,
+    key: String,
     name: String,
     version: String,
-    id: String,
-    key: String,
-    ip: IpAddr,
 }
 
 impl Display for DeviceInfo {
@@ -77,11 +93,12 @@ impl Truncate for DeviceInfo {
     /// Take the last 5 characters and prefix them with "..."
     fn truncate(&self) -> DeviceInfo {
         DeviceInfo {
+            dev_type: self.dev_type,
+            id: String::from("...") + Self::truncate_str(&self.id),
+            ip: self.ip,
+            key: String::from("...") + Self::truncate_str(&self.key),
             name: self.name.clone(),
             version: self.version.clone(),
-            id: String::from("...") + Self::truncate_str(&self.id),
-            key: String::from("...") + Self::truncate_str(&self.key),
-            ip: self.ip,
         }
     }
 }
@@ -96,13 +113,23 @@ impl DeviceInfo {
             }
         }
         // Then try to parse the topic as a device
-        if content.len() > 5 {
+        if content.len() == 6 {
             return Ok(DeviceInfo {
                 name: "".to_string(),
+                dev_type: default_devtype(),
                 version: content[1].to_string(),
                 id: content[2].to_string(),
                 key: content[3].to_string(),
                 ip: content[4].parse()?,
+            });
+        } else if content.len() > 7 {
+            return Ok(DeviceInfo {
+                name: "".to_string(),
+                dev_type: content[1].parse()?,
+                version: content[2].to_string(),
+                id: content[3].to_string(),
+                key: content[4].to_string(),
+                ip: content[5].parse()?,
             });
         }
         Err(anyhow!("Not a valid Topic"))

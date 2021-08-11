@@ -14,7 +14,7 @@ keywords = ["tuya", "smarthome", "smartlife", "mqtt", "openhab"]
 [dependencies]
 chrono = "0.4"
 crossbeam-channel = "0.3"
-ctrlc = { version = "3.1", features = ["termination"] }
+ctrlc = { version = "3.2", features = ["termination"] }
 env_logger = "0.8"
 anyhow = "1.0"
 thiserror = "1.0"

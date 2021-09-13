@@ -253,8 +253,10 @@ fn main() -> anyhow::Result<()> {
         std::env::var("TUYA_FULL_DISPLAY").map_or_else(|_| false, |_| true)
     );
     info!("Reading config file");
-    let config: Config = serde_json::from_reader(BufReader::new(File::open("config.json")?))
-        .context("Badly formatted config.json")?;
+    let config: Config = serde_json::from_reader(BufReader::new(
+        File::open("config.json").context("No config.json file found in curdir")?,
+    ))
+    .context("Badly formatted config.json")?;
     debug!("Read {:#?}", config);
 
     // Read the devices.json configuration file if it exist, set empty device map otherwise

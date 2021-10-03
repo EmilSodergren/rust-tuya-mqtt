@@ -3,12 +3,22 @@ use rust_tuyapi::{Payload, PayloadStruct};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
-use std::time::SystemTime;
+use std::time::Duration;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct GetPayload {
     dev_id: String,
     gw_id: String,
+}
+
+pub fn now_as_u32() -> Option<u32> {
+    use std::time::SystemTime;
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .as_ref()
+        .map(|dur| Duration::as_secs(dur))
+        .ok()
+        .and_then(|x| Some(x as u32))
 }
 
 // Convenience method to create a valid Tuya style payload from a device ID and a state received
@@ -34,21 +44,19 @@ pub fn payload(device_id: &str, tt: TuyaType, state: &str) -> Payload {
         dev_id: device_id.to_string(),
         gw_id: Some(device_id.to_string()),
         uid: None,
-        t: Some(
-            SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as u32,
-        ),
+        t: now_as_u32(),
         dps: dps(tt, state),
     })
 }
 
-pub fn _get_payload(device_id: &str) -> anyhow::Result<String> {
-    Ok(serde_json::to_string(&GetPayload {
+pub fn _get_payload(device_id: &str) -> Payload {
+    Payload::Struct(PayloadStruct {
         dev_id: device_id.to_string(),
-        gw_id: device_id.to_string(),
-    })?)
+        gw_id: Some(device_id.to_string()),
+        uid: None,
+        t: now_as_u32(),
+        dps: HashMap::new(),
+    })
 }
 
 fn dps(tt: TuyaType, state: &str) -> HashMap<String, serde_json::Value> {

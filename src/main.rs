@@ -25,6 +25,7 @@ const RETRIES: usize = 3;
 
 #[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
 pub enum TuyaType {
+    #[serde(rename = "socket")]
     Socket,
 }
 
@@ -175,6 +176,7 @@ fn set(dev: &TuyaDevice, pkid: u32, payload: Payload) -> Result<()> {
     use retry::{delay::Exponential, retry, Error};
 
     let delay = Exponential::from_millis(10).skip(SKIP).take(RETRIES);
+
     let try_set_payload = || {
         let r = dev.set(payload.clone(), pkid);
         print_warnings_on_failure(pkid, &r);
@@ -319,6 +321,7 @@ mod tests {
         assert_eq!(
             topic,
             DeviceInfo {
+                dev_type: TuyaType::Socket,
                 name: "".to_string(),
                 version: "ver3.3".to_string(),
                 id: "545c7250ecf8bc58a8fd".to_string(),

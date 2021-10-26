@@ -1,5 +1,5 @@
 use crate::TuyaType;
-use rust_tuyapi::{Payload, PayloadStruct};
+use rust_tuyapi::Payload;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
@@ -40,23 +40,25 @@ pub fn now_as_u32() -> Option<u32> {
 // }
 //
 pub fn payload(device_id: &str, tt: TuyaType, state: &str) -> Payload {
-    Payload::Struct(PayloadStruct {
-        dev_id: device_id.to_string(),
-        gw_id: Some(device_id.to_string()),
-        uid: None,
-        t: now_as_u32(),
-        dps: dps(tt, state),
-    })
+    Payload::new(
+        device_id.to_string(),
+        Some(device_id.to_string()),
+        None,
+        now_as_u32(),
+        None,
+        Some(dps(tt, state)),
+    )
 }
 
 pub fn _get_payload(device_id: &str) -> Payload {
-    Payload::Struct(PayloadStruct {
-        dev_id: device_id.to_string(),
-        gw_id: Some(device_id.to_string()),
-        uid: None,
-        t: now_as_u32(),
-        dps: HashMap::new(),
-    })
+    Payload::new(
+        device_id.to_string(),
+        Some(device_id.to_string()),
+        None,
+        now_as_u32(),
+        None,
+        Some(HashMap::new()),
+    )
 }
 
 fn dps(tt: TuyaType, state: &str) -> HashMap<String, serde_json::Value> {

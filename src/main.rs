@@ -267,7 +267,7 @@ fn main() -> anyhow::Result<()> {
         .context("Badly formatted devices.json")?;
 
     let mut options = MqttOptions::new(config.mqtt_id, config.host, config.port);
-    options.set_keep_alive(10);
+    options.set_keep_alive(Duration::from_secs(10));
     if !config.mqtt_user.is_empty() {
         options.set_credentials(config.mqtt_user, config.mqtt_pass);
     }

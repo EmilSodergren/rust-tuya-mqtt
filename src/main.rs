@@ -291,12 +291,7 @@ fn main() -> anyhow::Result<()> {
                 let map = device_map.clone();
                 thread::spawn(move || match handle_notification(n, &map) {
                     Ok(_) => (),
-                    Err(e) => {
-                        error!("{}", e);
-                        panic!(
-                            "Exiting here as an ugly workaround to the connection loop stopping!"
-                        )
-                    }
+                    Err(e) => error!("{}", e),
                 });
             }
             Err(e) => {

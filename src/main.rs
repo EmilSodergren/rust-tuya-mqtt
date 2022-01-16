@@ -271,6 +271,7 @@ fn main() -> anyhow::Result<()> {
     if !config.mqtt_user.is_empty() {
         options.set_credentials(config.mqtt_user, config.mqtt_pass);
     }
+    options.set_clean_session(false);
 
     let (mut client, mut connection) = Client::new(options, 10);
     let mut client2 = client.clone();

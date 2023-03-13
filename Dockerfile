@@ -1,4 +1,8 @@
-FROM alpine:3.16 AS downloader
+# Released with command:
+# docker buildx build -t mmrree/rust-tuya-mqtt:v<vers> --build-arg TAG=v<vers> --platform linux/amd64,linux/arm64,linux/arm/v7 . --push
+# docker buildx build -t mmrree/rust-tuya-mqtt:latest --build-arg TAG=v<vers> --platform linux/amd64,linux/arm64,linux/arm/v7 . --push
+
+FROM alpine:3.17 AS downloader
 
 ARG TAG
 ARG TARGETPLATFORM
@@ -15,7 +19,7 @@ fi
 EOT
 RUN tar xzf /rtm.tar.gz
 
-FROM alpine:3.16
+FROM alpine:3.17
 
 LABEL maintainer="Emil Sodergren <EmilSodergren@users.noreply.github.com>" description="Rust-tuya-mqtt in a container"
 

@@ -2,7 +2,7 @@
 name = "rust-tuya-mqtt"
 version = "0.8.6"
 authors = ["Emil Sodergren <EmilSodergren@users.noreply.github.com>"]
-edition = "2018"
+edition = "2021"
 description = "This crate is a rust port of TheAgentK's implementation of tuya-mqtt in NodeJS"
 homepage = "https://github.com/EmilSodergren/rust-tuya-mqtt"
 repository = "https://github.com/EmilSodergren/rust-tuya-mqtt"

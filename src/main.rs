@@ -29,6 +29,12 @@ pub enum TuyaType {
     Socket,
 }
 
+impl Default for TuyaType {
+    fn default() -> Self {
+        TuyaType::Socket
+    }
+}
+
 impl FromStr for TuyaType {
     type Err = serde_json::error::Error;
 
@@ -65,13 +71,9 @@ fn default_port() -> u16 {
     1883_u16
 }
 
-fn default_devtype() -> TuyaType {
-    TuyaType::Socket
-}
-
 #[derive(Deserialize, Debug, Serialize, PartialEq, Clone)]
 struct DeviceInfo {
-    #[serde(default = "default_devtype")]
+    #[serde(default)]
     dev_type: TuyaType,
     id: String,
     ip: IpAddr,
@@ -117,7 +119,7 @@ impl DeviceInfo {
         if content.len() == 6 {
             return Ok(DeviceInfo {
                 name: "".to_string(),
-                dev_type: default_devtype(),
+                dev_type: Default::default(),
                 version: content[1].to_string(),
                 id: content[2].to_string(),
                 key: content[3].to_string(),
@@ -322,7 +324,7 @@ mod tests {
         assert_eq!(
             topic,
             DeviceInfo {
-                dev_type: TuyaType::Socket,
+                dev_type: Default::default(),
                 name: "".to_string(),
                 version: "ver3.3".to_string(),
                 id: "545c7250ecf8bc58a8fd".to_string(),

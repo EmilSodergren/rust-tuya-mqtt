@@ -146,7 +146,7 @@ fn handle_publish(publish: Publish, devices: &DeviceMap) -> Result<()> {
     debug!("{}", dev_info);
     let mqtt_state =
         std::str::from_utf8(&publish.payload).context("Mqtt payload is not valid utf8")?;
-    let tuya_payload = payload(&dev_info.id, TuyaType::Socket, &mqtt_state);
+    let tuya_payload = payload(&dev_info.id, dev_info.dev_type, &mqtt_state);
     let tuya_device = TuyaDevice::create(&dev_info.version, Some(&dev_info.key), dev_info.ip)
         .context("Could not create TuyaDevice")?;
     let pkid = publish.pkid as u32;
